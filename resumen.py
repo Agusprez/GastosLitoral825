@@ -85,7 +85,7 @@ def mostrar_vista_resumen(df):
     col_b.metric("Movimientos", len(df_filtrado))
 
     # --- CÁLCULO DE DEUDAS ---
-    total_agus = df_filtrado[df_filtrado['Quien'] == 'Agustin']['Monto'].sum()
+    total_agus = df_filtrado[df_filtrado['Quien'] == 'Agustín']['Monto'].sum()
     total_jorge = df_filtrado[df_filtrado['Quien'] == 'Jorge']['Monto'].sum()
     diferencia = abs(total_agus - total_jorge) / 2
 
