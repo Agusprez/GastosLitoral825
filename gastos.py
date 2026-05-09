@@ -90,14 +90,17 @@ if menu == "📝 Cargar Gasto":
     with st.form("carga", clear_on_submit=True):
         col1, col2 = st.columns(2)
         
-        # --- LÓGICA DE PRESELECCIÓN ---
+        # --- LÓGICA DE PRESELECCIÓN MEJORADA ---
         usuarios = ["Agustín", "Jorge"]
-        # Buscamos en qué posición está el usuario que inició sesión (0 o 1)
-        indice_usuario = usuarios.index(st.session_state["usuario_actual"])
+        user_sesion = st.session_state.get("usuario_actual", "Agustín")
         
-        # Le pasamos ese índice al selectbox para que arranque en su nombre
+        # Usamos un try/except para que si falla el index(), la app no muera
+        try:
+            indice_usuario = usuarios.index(user_sesion)
+        except ValueError:
+            indice_usuario = 0
+        
         quien = col1.selectbox("¿Quién pagó?", usuarios, index=indice_usuario)
-        
         monto = col1.number_input("Monto ($)", min_value=0.0, step=100.0)
         cat = col2.selectbox("Categoria", ["Supermercado", "Servicios", "Internet", "Auto", "Salidas", "Casa", "Otros"])
         con = col2.text_input("Detalle")
@@ -106,8 +109,10 @@ if menu == "📝 Cargar Gasto":
         archivo_subido = st.file_uploader("Subir comprobante o ticket (Opcional)", type=['jpg', 'jpeg', 'png'])
         
         st.write("---")
-        if st.form_submit_button("Guardar"):
-            
+        # EL BOTÓN DE SUBMIT: Aseguramos que siempre se ejecute
+        boton_guardar = st.form_submit_button("Guardar Gasto")
+        
+        if boton_guardar:
             zona_ar = timezone(timedelta(hours=-3))
             fecha = datetime.now(zona_ar).strftime("%d/%m/%Y")
             
@@ -120,11 +125,9 @@ if menu == "📝 Cargar Gasto":
                 client = get_gsheets_client()
                 sheet = client.open_by_url(st.secrets["sheet_url_gastos"]).worksheet("Gastos")
                 sheet.append_row([fecha, quien, con, monto, cat, link_comprobante])
-                
                 st.cache_data.clear()
             
-            st.success("¡Gasto guardado! Podés verlo ahora en el resumen.")
-
+            st.success("¡Gasto guardado correctamente!")
 else:
     with st.spinner("Leyendo planilla actualizada..."):
         df = cargar_datos()
