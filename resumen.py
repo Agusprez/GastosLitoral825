@@ -83,14 +83,14 @@ def mostrar_vista_resumen(df):
     col_b.metric("Movimientos", len(df_filtrado))
 
     # --- CÁLCULO DE DEUDAS ---
-    total_agus = df_filtrado[df_filtrado['Quien'] == 'Agustín']['Monto'].sum()
+    total_agus = df_filtrado[df_filtrado['Quien'] == 'Agustin']['Monto'].sum()
     total_jorge = df_filtrado[df_filtrado['Quien'] == 'Jorge']['Monto'].sum()
     diferencia = abs(total_agus - total_jorge) / 2
 
     if total_agus > total_jorge:
-        st.info(f"💸 **Jorge le debe a Agustín:** ${diferencia:,.2f}")
+        st.info(f"💸 **Jorge le debe a Agustin:** ${diferencia:,.2f}")
     elif total_jorge > total_agus:
-        st.warning(f"💸 **Agustín le debe a Jorge:** ${diferencia:,.2f}")
+        st.warning(f"💸 **Agustin le debe a Jorge:** ${diferencia:,.2f}")
     else:
         st.success("✨ **¡Están empatados! Nadie le debe a nadie este mes.**")
 
