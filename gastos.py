@@ -22,7 +22,7 @@ if not st.session_state["autenticado"]:
     st.write("Identificate para entrar.")
     
     # Ahora elegís quién sos antes de poner la clave
-    usuario_elegido = st.selectbox("Usuario:", ["Agustín", "Jorge"])
+    usuario_elegido = st.selectbox("Usuario:", ["Agustin", "Jorge"])
     clave_ingresada = st.text_input("Contraseña:", type="password")
     
     if st.button("Entrar"):
