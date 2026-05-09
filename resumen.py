@@ -38,7 +38,14 @@ def mostrar_vista_resumen(df):
         return
 
     df_res['Año'] = df_res['Fecha_DT'].dt.year
+    
 
+
+
+    # --- LÓGICA DE MES EN CURSO ---
+    ahora = datetime.now()
+    nombre_mes_actual = ahora.strftime("%B") # Obtiene el nombre del mes en inglés (ej: 'May')
+    anio_actual = ahora.year
     traduccion_meses = {
     'January': 'Enero', 'February': 'Febrero', 'March': 'Marzo', 
     'April': 'Abril', 'May': 'Mayo', 'June': 'Junio', 
@@ -46,11 +53,6 @@ def mostrar_vista_resumen(df):
     'October': 'Octubre', 'November': 'Noviembre', 'December': 'Diciembre'
     }
     df_res['Mes'] = df_res['Fecha_DT'].dt.month_name().map(traduccion_meses)
-
-    # --- LÓGICA DE MES EN CURSO ---
-    ahora = datetime.now()
-    nombre_mes_actual = ahora.strftime("%B") # Obtiene el nombre del mes en inglés (ej: 'May')
-    anio_actual = ahora.year
 
     st.sidebar.markdown("---")
     st.sidebar.header("Filtros")
