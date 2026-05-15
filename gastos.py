@@ -8,7 +8,7 @@ import base64
 from resumen import mostrar_vista_resumen
 
 # --- CONFIGURACIÓN ---
-st.set_page_config(page_title="Gastos Casa - San Pedro", layout="wide")
+st.set_page_config(page_title="Gastos Litoral 825", layout="wide")
 
 # ==========================================
 # 🔒 SISTEMA DE LOGIN PERSONALIZADO
