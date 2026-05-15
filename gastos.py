@@ -21,17 +21,15 @@ if not st.session_state["autenticado"]:
     st.title("🔒 Acceso a Gastos")
     st.write("Identificate para entrar.")
     
-    # Ahora elegís quién sos antes de poner la clave
     usuario_elegido = st.selectbox("Usuario:", ["Agustin", "Jorge"])
     clave_ingresada = st.text_input("Contraseña:", type="password")
     
     if st.button("Entrar"):
-        # Buscamos la clave correspondiente a ese usuario en los secretos
         clave_real = st.secrets["passwords"].get(usuario_elegido)
         
         if clave_ingresada == clave_real:
             st.session_state["autenticado"] = True
-            st.session_state["usuario_actual"] = usuario_elegido # Guardamos quién entró
+            st.session_state["usuario_actual"] = usuario_elegido
             st.rerun()
         else:
             st.error("Contraseña incorrecta. Intentá de nuevo.")
@@ -68,33 +66,34 @@ def subir_a_imgbb(archivo):
         return response.json()["data"]["url"]
     return "Error al subir imagen"
 
-# --- INTERFAZ ---
-st.title("🏠 Gastos Compartidos")
+# --- INTERFAZ MODERNA ---
+st.title("🏠 Gastos Compartidos — San Pedro")
 
-# Agregamos un saludo personalizado en la barra lateral
+# Configuración de la barra lateral (Limpia y enfocada en acciones)
 st.sidebar.success(f"Hola, {st.session_state['usuario_actual']} 👋")
 
-if st.sidebar.button("🔄 Sincronizar con Google Sheets"):
+st.sidebar.markdown("### Acciones")
+if st.sidebar.button("🔄 Sincronizar Planilla", width='stretch'):
     st.cache_data.clear()
     st.rerun()
 
-# Botón para cerrar sesión si quieren cambiar de usuario en la misma compu
-if st.sidebar.button("🚪 Cerrar Sesión"):
+if st.sidebar.button("🚪 Cerrar Sesión", width='stretch'):
     st.session_state["autenticado"] = False
     st.session_state["usuario_actual"] = ""
     st.rerun()
 
-menu = st.sidebar.selectbox("Navegación", ["📝 Cargar Gasto", "📊 Ver Resumen"])
+# --- NAVEGACIÓN POR PESTAÑAS CENTRALES ---
+tab_cargar, tab_resumen = st.tabs(["📝 Cargar Nuevo Gasto", "📊 Ver Resumen Mensual"])
 
-if menu == "📝 Cargar Gasto":
+# PESTAÑA 1: CARGAR GASTO
+with tab_cargar:
+    st.markdown("### Registrar un gasto reciente")
     with st.form("carga", clear_on_submit=True):
         col1, col2 = st.columns(2)
         
-        # --- LÓGICA DE PRESELECCIÓN MEJORADA ---
-        usuarios = ["Agustín", "Jorge"]
-        user_sesion = st.session_state.get("usuario_actual", "Agustín")
+        usuarios = ["Agustin", "Jorge"]
+        user_sesion = st.session_state.get("usuario_actual", "Agustin")
         
-        # Usamos un try/except para que si falla el index(), la app no muera
         try:
             indice_usuario = usuarios.index(user_sesion)
         except ValueError:
@@ -102,15 +101,14 @@ if menu == "📝 Cargar Gasto":
         
         quien = col1.selectbox("¿Quién pagó?", usuarios, index=indice_usuario)
         monto = col1.number_input("Monto ($)", min_value=0.0, step=100.0)
-        cat = col2.selectbox("Categoria", ["Supermercado", "Servicios", "Internet", "Auto", "Salidas", "Casa", "Otros"])
-        con = col2.text_input("Detalle")
+        cat = col2.selectbox("Categoría", ["Supermercado", "Servicios", "Internet", "Auto", "Salidas", "Casa", "Otros"])
+        con = col2.text_input("Detalle (Concepto)")
         
         st.write("---")
         archivo_subido = st.file_uploader("Subir comprobante o ticket (Opcional)", type=['jpg', 'jpeg', 'png'])
         
         st.write("---")
-        # EL BOTÓN DE SUBMIT: Aseguramos que siempre se ejecute
-        boton_guardar = st.form_submit_button("Guardar Gasto")
+        boton_guardar = st.form_submit_button("Guardar Gasto", type="primary")
         
         if boton_guardar:
             zona_ar = timezone(timedelta(hours=-3))
@@ -118,17 +116,19 @@ if menu == "📝 Cargar Gasto":
             
             link_comprobante = "Sin comprobante"
             if archivo_subido is not None:
-                with st.spinner("Subiendo imagen..."):
+                with st.spinner("Subiendo imagen a la nube..."):
                     link_comprobante = subir_a_imgbb(archivo_subido)
             
-            with st.spinner("Guardando en Google..."):
+            with st.spinner("Guardando en Google Sheets..."):
                 client = get_gsheets_client()
                 sheet = client.open_by_url(st.secrets["sheet_url_gastos"]).worksheet("Gastos")
                 sheet.append_row([fecha, quien, con, monto, cat, link_comprobante])
                 st.cache_data.clear()
             
             st.success("¡Gasto guardado correctamente!")
-else:
-    with st.spinner("Leyendo planilla actualizada..."):
+
+# PESTAÑA 2: RESUMEN
+with tab_resumen:
+    with st.spinner("Leyendo planilla actualizada de Google Sheets..."):
         df = cargar_datos()
     mostrar_vista_resumen(df)
