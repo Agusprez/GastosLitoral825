@@ -6,9 +6,10 @@ from datetime import datetime, timezone, timedelta
 import requests
 import base64
 from resumen import mostrar_vista_resumen
+from compras import mostrar_vista_compras  # <-- NUEVA IMPORTACIÓN
 
 # --- CONFIGURACIÓN ---
-st.set_page_config(page_title="Gastos Litoral 825", layout="wide")
+st.set_page_config(page_title="Gastos Casa - San Pedro", layout="wide")
 
 # ==========================================
 # 🔒 SISTEMA DE LOGIN PERSONALIZADO
@@ -21,7 +22,7 @@ if not st.session_state["autenticado"]:
     st.title("🔒 Acceso a Gastos")
     st.write("Identificate para entrar.")
     
-    usuario_elegido = st.selectbox("Usuario:", ["Agustin", "Jorge"])
+    usuario_elegido = st.selectbox("Usuario:", ["Agustín", "Jorge"])
     clave_ingresada = st.text_input("Contraseña:", type="password")
     
     if st.button("Entrar"):
@@ -46,7 +47,7 @@ def get_gsheets_client():
     return gspread.authorize(creds)
 
 @st.cache_data(ttl=60)
-def cargar_datos():
+def cargar_datos_gastos():
     client = get_gsheets_client()
     sheet = client.open_by_url(st.secrets["sheet_url_gastos"]).worksheet("Gastos")
     data = sheet.get_all_records()
@@ -67,23 +68,26 @@ def subir_a_imgbb(archivo):
     return "Error al subir imagen"
 
 # --- INTERFAZ MODERNA ---
-st.title("🏠 Gastos Compartidos — San Pedro")
+st.title("🏠 Sistema Casa — San Pedro")
 
-# Configuración de la barra lateral (Limpia y enfocada en acciones)
+# Barra lateral
 st.sidebar.success(f"Hola, {st.session_state['usuario_actual']} 👋")
-
 st.sidebar.markdown("### Acciones")
-if st.sidebar.button("🔄 Sincronizar Planilla", width='stretch'):
+if st.sidebar.button("🔄 Sincronizar Todo", use_container_width=True):
     st.cache_data.clear()
     st.rerun()
 
-if st.sidebar.button("🚪 Cerrar Sesión", width='stretch'):
+if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
     st.session_state["autenticado"] = False
     st.session_state["usuario_actual"] = ""
     st.rerun()
 
 # --- NAVEGACIÓN POR PESTAÑAS CENTRALES ---
-tab_cargar, tab_resumen = st.tabs(["📝 Cargar Nuevo Gasto", "📊 Ver Resumen Mensual"])
+tab_cargar, tab_resumen, tab_compras = st.tabs([
+    "📝 Cargar Nuevo Gasto", 
+    "📊 Ver Resumen Mensual", 
+    "🛒 Lista de Compras"
+])
 
 # PESTAÑA 1: CARGAR GASTO
 with tab_cargar:
@@ -91,8 +95,8 @@ with tab_cargar:
     with st.form("carga", clear_on_submit=True):
         col1, col2 = st.columns(2)
         
-        usuarios = ["Agustin", "Jorge"]
-        user_sesion = st.session_state.get("usuario_actual", "Agustin")
+        usuarios = ["Agustín", "Jorge"]
+        user_sesion = st.session_state.get("usuario_actual", "Agustín")
         
         try:
             indice_usuario = usuarios.index(user_sesion)
@@ -130,5 +134,9 @@ with tab_cargar:
 # PESTAÑA 2: RESUMEN
 with tab_resumen:
     with st.spinner("Leyendo planilla actualizada de Google Sheets..."):
-        df = cargar_datos()
+        df = cargar_datos_gastos()
     mostrar_vista_resumen(df)
+
+# PESTAÑA 3: LISTA DE COMPRAS (Módulo importado)
+with tab_compras:
+    mostrar_vista_compras()  # <-- LLAMADA LIMPIA AL NUEVO ARCHIVO
