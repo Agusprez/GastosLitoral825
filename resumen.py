@@ -194,7 +194,7 @@ def mostrar_vista_resumen(df):
                 monto_final = monto_formateado.replace(",", ".")
                 
                 # Devolvemos el signo pesos con los miles en puntos, y el porcentaje abajo entre paréntesis
-                return f"${porcentaje:.1f}\n({monto_final}%)"
+                return f"{porcentaje:.1f}%\n(${monto_final})"
 
             # 3. Armamos el gráfico con fondo transparente
             fig, ax = plt.subplots(figsize=(5, 5))
