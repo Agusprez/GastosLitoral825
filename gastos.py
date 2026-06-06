@@ -5,6 +5,7 @@ from google.oauth2.service_account import Credentials
 from datetime import datetime, timezone, timedelta
 import requests
 import base64
+import time  # <-- NUEVA IMPORTACIÓN NATIVA PARA EL DELAY
 from resumen import mostrar_vista_resumen
 from compras import mostrar_vista_compras
 from streamlit_cookies_controller import CookieController
@@ -12,25 +13,32 @@ from streamlit_cookies_controller import CookieController
 # --- CONFIGURACIÓN ---
 st.set_page_config(page_title="Gastos Casa - San Pedro", layout="wide")
 
-# Inicializamos el puente con el LocalStorage del navegador
+# Inicializamos el controlador de cookies
 controller = CookieController()
 
 # ==========================================
-# 🔒 SISTEMA DE LOGIN CON LOCALSTORAGE
+# 🔒 SISTEMA DE LOGIN CON COOKIES ASÍNCRONAS
 # ==========================================
 if "autenticado" not in st.session_state:
     st.session_state["autenticado"] = False
     st.session_state["usuario_actual"] = ""
 
-# 1. Intentamos recuperar la cookie del navegador
+# --- PARCHE DE TIEMPO PARA EVITAR EL LOGIN EN F5 ---
 if not st.session_state["autenticado"]:
-    usuario_guardado = controller.get("usuario_casa_sanpedro")
+    # Le damos 3 intentos con pequeños micro-descansos para esperar al navegador
+    usuario_guardado = None
+    for _ in range(3):
+        usuario_guardado = controller.get("usuario_casa_sanpedro")
+        if usuario_guardado:
+            break
+        time.sleep(0.2)  # Espera 200 milisegundos antes de volver a chequear
+
     if usuario_guardado:
         st.session_state["autenticado"] = True
         st.session_state["usuario_actual"] = usuario_guardado
         st.rerun()
 
-# 2. Pantalla de login si no está autenticado
+# Si después de esperar la cookie sigue vacía, recién ahí va al formulario
 if not st.session_state["autenticado"]:
     st.title("🔒 Acceso a Gastos")
     st.write("Identificate para entrar.")
@@ -45,13 +53,12 @@ if not st.session_state["autenticado"]:
             st.session_state["autenticado"] = True
             st.session_state["usuario_actual"] = usuario_elegido
             
-            # Guardamos la cookie en el navegador
+            # Guardamos la cookie de forma persistente
             controller.set("usuario_casa_sanpedro", usuario_elegido)
             st.rerun()
         else:
             st.error("Contraseña incorrecta. Intentá de nuevo.")
-    st.stop()
-# ==========================================
+    st.stop()# ==========================================
 # 🚀 APLICACIÓN PRINCIPAL
 # ==========================================
 
