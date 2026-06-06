@@ -96,10 +96,10 @@ if st.sidebar.button("🔄 Sincronizar Todo", use_container_width=True):
     st.rerun()
 
 if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
-    # Borramos el registro del navegador
-    local_storage.delete("usuario_casa_sanpedro")
+    # --- ACÁ CAMBIAMOS .delete POR .remove ---
+    local_storage.remove("usuario_casa_sanpedro")
     
-    # Limpiamos variables comunes
+    # Limpiamos variables comunes de la sesión
     st.session_state["autenticado"] = False
     st.session_state["usuario_actual"] = ""
     st.rerun()
