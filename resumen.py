@@ -179,8 +179,36 @@ def mostrar_vista_resumen(df):
     with col_der:
         st.markdown("**Gastos por Categoría**")
         df_cat = df_filtrado.groupby('Categoria')['Monto'].sum()
+        
         if not df_cat.empty:
+            # 1. Calculamos el total general del mes
+            total_gastos_mes = df_cat.sum()
+            
+            # 2. Función con formato regional para los miles y paréntesis abajo
+            def formatear_etiqueta(porcentaje):
+                monto_real = porcentaje / 100.0 * total_gastos_mes
+                
+                # Formateamos el número con comas inglesas primero, sin decimales
+                monto_formateado = f"{monto_real:,.0f}"
+                # Cambiamos las comas por puntos para el formato argentino
+                monto_final = monto_formateado.replace(",", ".")
+                
+                # Devolvemos el signo pesos con los miles en puntos, y el porcentaje abajo entre paréntesis
+                return f"${porcentaje:.1f}\n({monto_final}%)"
+
+            # 3. Armamos el gráfico con fondo transparente
             fig, ax = plt.subplots(figsize=(5, 5))
-            df_cat.plot(kind='pie', autopct='%1.1f%%', ax=ax, startangle=90, cmap='Pastel1')
+            fig.patch.set_alpha(0.0)  
+            ax.patch.set_alpha(0.0)   
+            
+            df_cat.plot(
+                kind='pie', 
+                autopct=formatear_etiqueta, 
+                ax=ax, 
+                startangle=90, 
+                cmap='Pastel1',
+                textprops={'fontsize': 10, 'weight': 'bold'}
+            )
+            
             ax.set_ylabel('')
             st.pyplot(fig)
