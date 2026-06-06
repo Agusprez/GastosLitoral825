@@ -27,7 +27,7 @@ if "autenticado" not in st.session_state:
 if not st.session_state["autenticado"]:
     # Le damos 3 intentos con pequeños micro-descansos para esperar al navegador
     usuario_guardado = None
-    for _ in range(3):
+    for _ in range(10):
         usuario_guardado = controller.get("usuario_casa_sanpedro")
         if usuario_guardado:
             break
