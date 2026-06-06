@@ -22,7 +22,7 @@ if not st.session_state["autenticado"]:
     st.title("🔒 Acceso a Gastos")
     st.write("Identificate para entrar.")
     
-    usuario_elegido = st.selectbox("Usuario:", ["Agustín", "Jorge"])
+    usuario_elegido = st.selectbox("Usuario:", ["Agustin", "Jorge"])
     clave_ingresada = st.text_input("Contraseña:", type="password")
     
     if st.button("Entrar"):
@@ -95,8 +95,8 @@ with tab_cargar:
     with st.form("carga", clear_on_submit=True):
         col1, col2 = st.columns(2)
         
-        usuarios = ["Agustín", "Jorge"]
-        user_sesion = st.session_state.get("usuario_actual", "Agustín")
+        usuarios = ["Agustin", "Jorge"]
+        user_sesion = st.session_state.get("usuario_actual", "Agustin")
         
         try:
             indice_usuario = usuarios.index(user_sesion)
