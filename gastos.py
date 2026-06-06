@@ -7,13 +7,13 @@ import requests
 import base64
 from resumen import mostrar_vista_resumen
 from compras import mostrar_vista_compras
-from streamlit_local_storage import StLocalStorage  # <-- NUEVA IMPORTACIÓN
+from streamlit_cookies_controller import CookieController
 
 # --- CONFIGURACIÓN ---
 st.set_page_config(page_title="Gastos Casa - San Pedro", layout="wide")
 
 # Inicializamos el puente con el LocalStorage del navegador
-local_storage = StLocalStorage()
+controller = CookieController()
 
 # ==========================================
 # 🔒 SISTEMA DE LOGIN CON LOCALSTORAGE
@@ -22,15 +22,15 @@ if "autenticado" not in st.session_state:
     st.session_state["autenticado"] = False
     st.session_state["usuario_actual"] = ""
 
-# 1. Intentamos recuperar una sesión guardada si la app se reinició
+# 1. Intentamos recuperar la cookie del navegador
 if not st.session_state["autenticado"]:
-    usuario_guardado = local_storage.get("usuario_casa_sanpedro")
+    usuario_guardado = controller.get("usuario_casa_sanpedro")
     if usuario_guardado:
         st.session_state["autenticado"] = True
         st.session_state["usuario_actual"] = usuario_guardado
         st.rerun()
 
-# 2. Si no hay nada en LocalStorage, mostramos la pantalla de login común
+# 2. Pantalla de login si no está autenticado
 if not st.session_state["autenticado"]:
     st.title("🔒 Acceso a Gastos")
     st.write("Identificate para entrar.")
@@ -42,19 +42,15 @@ if not st.session_state["autenticado"]:
         clave_real = st.secrets["passwords"].get(usuario_elegido)
         
         if clave_ingresada == clave_real:
-            # Guardamos en la sesión de Streamlit
             st.session_state["autenticado"] = True
             st.session_state["usuario_actual"] = usuario_elegido
             
-            # --- GUARDAMOS EN EL NAVEGADOR ---
-            local_storage.set("usuario_casa_sanpedro", usuario_elegido)
-            
+            # Guardamos la cookie en el navegador
+            controller.set("usuario_casa_sanpedro", usuario_elegido)
             st.rerun()
         else:
             st.error("Contraseña incorrecta. Intentá de nuevo.")
-            
     st.stop()
-
 # ==========================================
 # 🚀 APLICACIÓN PRINCIPAL
 # ==========================================
@@ -96,10 +92,7 @@ if st.sidebar.button("🔄 Sincronizar Todo", use_container_width=True):
     st.rerun()
 
 if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
-    # --- ACÁ CAMBIAMOS .delete POR .remove ---
-    local_storage.remove("usuario_casa_sanpedro")
-    
-    # Limpiamos variables comunes de la sesión
+    controller.remove("usuario_casa_sanpedro") # Borra la cookie
     st.session_state["autenticado"] = False
     st.session_state["usuario_actual"] = ""
     st.rerun()
