@@ -165,7 +165,7 @@ def mostrar_vista_resumen(df):
         evento_tabla = st.dataframe(
             df_tabla[['Fecha', 'Quien', 'Concepto', 'Monto', 'Categoria', 'Comprobante']],
             hide_index=True,
-            width='stretch',
+            use_container_width=True,  # <-- CAMBIO AQUÍ: Reemplazamos width='stretch'
             selection_mode="single-row",
             on_select="rerun"
         )
