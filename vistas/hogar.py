@@ -152,6 +152,17 @@ def _mensaje_whatsapp(ctx: Contexto, codigo: str, expira_en: str = "") -> None:
         f'<div class="cc-codigo">{datos.get("codigo", codigo)}</div>',
         unsafe_allow_html=True,
     )
+
+    url = (ctx.config.url_publica or "").strip()
+    if not url:
+        st.warning(
+            "El mensaje sale **sin el link de acceso** porque falta `url_publica` en "
+            "los Secretos. Agregá `url_publica = \"https://litoral825.streamlit.app\"` "
+            "y reiniciá la app para que el texto lo incluya."
+        )
+    else:
+        st.caption(f"Link de acceso que va en el mensaje: {url}")
+
     st.caption(
         "Copiá el mensaje con el ícono de la esquina, o abrí WhatsApp directamente "
         "con el texto cargado. Si la persona ya tiene cuenta, puede pegar el código "

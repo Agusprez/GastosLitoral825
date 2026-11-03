@@ -164,6 +164,39 @@ class TestVistasApp(BaseVistas):
         self.assertEqual(self.fallos(), [])
 
 
+    def test_avisa_si_falta_url_publica(self):
+        codigo = self.repo.invitar(self.hogar["id"], self.usuario["id"])["codigo"]
+        streamlit_falso.ESTADO["cc_ultima_invitacion"] = {"codigo": codigo, "expira_en": ""}
+        self.correr(hogar.render, self.ctx)
+        avisos = " ".join(str(args[0]) for (args, _) in streamlit_falso.llamadas("warning"))
+        self.assertIn("url_publica", avisos)
+
+    def test_el_mensaje_incluye_la_url_configurada(self):
+        config = armar(
+            {
+                "almacen": "memoria",
+                "cifrado": False,
+                "url_publica": "https://litoral825.streamlit.app",
+            }
+        )
+        ctx = Contexto(
+            config=config,
+            store=self.store,
+            repo=Repositorio(self.store, config),
+            medios=self.medios,
+            ctrl=streamlit_falso._CookieController(),
+            usuario=self.usuario,
+            token="token",
+            hogar=self.hogar,
+            origen_clave="prueba",
+        )
+        codigo = self.repo.invitar(self.hogar["id"], self.usuario["id"])["codigo"]
+        streamlit_falso.ESTADO["cc_ultima_invitacion"] = {"codigo": codigo, "expira_en": ""}
+        self.correr(hogar.render, ctx)
+        textos = " ".join(str(args[0]) for (args, _) in streamlit_falso.llamadas("code"))
+        self.assertIn("https://litoral825.streamlit.app", textos)
+
+
 class TestAdmin(BaseVistas):
     def test_admin(self):
         usuario = self.repo.crear_usuario(
