@@ -197,6 +197,26 @@ class TestVistasConClicks(BaseVistas):
         self.correr(landing.render, self._contexto(None, None))
 
 
+class TestNavegacion(BaseVistas):
+    """El radio manda: la sección elegida no puede rebotar a Inicio."""
+
+    PAGINAS = {"🏠 Inicio": inicio.render, "🧾 Gastos": gastos.render}
+
+    def test_respeta_la_seccion_elegida(self):
+        streamlit_falso.ESTADO["cc_navegacion"] = "🧾 Gastos"
+        streamlit_falso.ESTADO["cc_pagina"] = "🏠 Inicio"  # valor viejo
+        self.assertEqual(navegacion.render(self.ctx, self.PAGINAS), "🧾 Gastos")
+
+    def test_pedido_por_codigo(self):
+        streamlit_falso.ESTADO["cc_ir_a"] = "🧾 Gastos"
+        self.assertEqual(navegacion.render(self.ctx, self.PAGINAS), "🧾 Gastos")
+        self.assertNotIn("cc_ir_a", streamlit_falso.ESTADO)
+
+    def test_seccion_que_ya_no_existe(self):
+        streamlit_falso.ESTADO["cc_navegacion"] = "🛠️ Plataforma"
+        self.assertEqual(navegacion.render(self.ctx, self.PAGINAS), "🏠 Inicio")
+
+
 class TestCodificacion(unittest.TestCase):
     """Los .py del proyecto tienen que estar en UTF-8 limpio, sin mojibake."""
 

@@ -43,17 +43,28 @@ def render(ctx: Contexto, paginas: dict[str, str]) -> str:
         st.divider()
 
         opciones = list(paginas)
-        destino = st.session_state.get("cc_pagina")
-        # Si otra parte de la app pidió cambiar de sección (por ejemplo el botón
-        # "Ver planes"), sincronizamos el estado del widget antes de dibujarlo.
-        if destino in opciones and st.session_state.get("cc_navegacion") != destino:
-            st.session_state["cc_navegacion"] = destino
-        if destino not in opciones:
-            destino = opciones[0]
+
+        # Navegación pedida por código (un solo uso): la sección "Ver planes" o
+        # cualquier vista que quiera llevar a la persona a otro lado deja acá el
+        # destino y recarga. Se consume ANTES de dibujar el radio.
+        pedido = st.session_state.pop("cc_ir_a", None)
+        if pedido in opciones:
+            st.session_state["cc_navegacion"] = pedido
+
+        # El estado del widget manda: si la persona eligió "Gastos", seguimos en
+        # "Gastos" (ésta era la causa del rebote a Inicio). Sólo se descarta si
+        # apunta a una sección que ya no existe (por ejemplo, perdió el rol admin).
+        actual = st.session_state.get("cc_navegacion")
+        if actual not in opciones:
+            st.session_state.pop("cc_navegacion", None)
+            actual = st.session_state.get("cc_pagina")
+        if actual not in opciones:
+            actual = opciones[0]
+
         elegida = st.radio(
             "Navegación",
             opciones,
-            index=opciones.index(destino),
+            index=opciones.index(actual),
             key="cc_navegacion",
             label_visibility="collapsed",
         )
@@ -69,7 +80,7 @@ def render(ctx: Contexto, paginas: dict[str, str]) -> str:
         if ctx.hogar and ctx.hogar["plan"] == planes.GRATIS:
             st.caption("¿Más hogares o historial completo? Pasate a Pro.")
             if st.button("Ver planes", use_container_width=True, key="btn_planes_sidebar"):
-                st.session_state["cc_pagina"] = "💳 Plan"
+                st.session_state["cc_ir_a"] = "💳 Plan"
                 st.rerun()
 
     return elegida

@@ -117,9 +117,12 @@ class TestAppCompleta(unittest.TestCase):
             "💳 Plan",
             "👤 Mi cuenta",
         ):
-            streamlit_falso.ESTADO["cc_pagina"] = seccion
+            # La navegación normal la maneja el radio; para pedir una sección
+            # desde el código se usa `cc_ir_a`.
+            streamlit_falso.ESTADO["cc_ir_a"] = seccion
             self.correr_app()
             self.assertEqual(self.errores_graves(), [], f"falló la sección {seccion}")
+            self.assertEqual(streamlit_falso.ESTADO.get("cc_pagina"), seccion)
 
     def test_usuario_sin_hogar_ve_onboarding(self):
         self.correr_app()
