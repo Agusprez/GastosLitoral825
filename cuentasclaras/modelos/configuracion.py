@@ -80,7 +80,11 @@ class Config:
     # Plataforma.
     admins: tuple[str, ...] = ()
     registro_abierto: bool = True
-    url_publica: str = ""
+    # Dirección pública de la app: es el link que va en los mensajes de invitación
+    # y en los textos de soporte. Viene con la del despliegue actual; se puede
+    # sobreescribir con el secreto `url_publica` (útil si cambiás de dominio o si
+    # desplegás una copia para otra persona).
+    url_publica: str = "https://litoral825.streamlit.app"
     soporte_email: str = "hola@cuentasclaras.app"
 
     # Comercial.
@@ -175,7 +179,7 @@ def armar(datos: Mapping[str, Any] | None = None) -> Config:
         clave_archivo=_texto(ajuste("clave_archivo"), Config.clave_archivo),
         admins=_lista(ajuste("admins")),
         registro_abierto=_booleano(ajuste("registro_abierto"), True),
-        url_publica=_texto(ajuste("url_publica") or ajuste("app_url")),
+        url_publica=_texto(ajuste("url_publica") or ajuste("app_url"), Config.url_publica),
         soporte_email=_texto(ajuste("soporte_email"), Config.soporte_email),
         precio_mensual=_texto(ajuste("precio_mensual"), Config.precio_mensual),
         precio_anual=_texto(ajuste("precio_anual"), Config.precio_anual),

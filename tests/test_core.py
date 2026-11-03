@@ -594,6 +594,14 @@ class TestConfiguracion(unittest.TestCase):
     def test_alias_app_url(self):
         self.assertEqual(armar({"app_url": "https://y.app"}).url_publica, "https://y.app")
 
+    def test_url_publica_por_defecto(self):
+        """Sin configurar nada, el mensaje de invitación ya trae el link real."""
+        self.assertEqual(
+            armar({"almacen": "memoria"}).url_publica,
+            "https://litoral825.streamlit.app",
+        )
+        self.assertEqual(armar({"almacen": "memoria", "url_publica": ""}).url_publica, "https://litoral825.streamlit.app")
+
     def test_otros_ajustes_anidados(self):
         config = armar(
             {

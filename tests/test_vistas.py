@@ -165,9 +165,24 @@ class TestVistasApp(BaseVistas):
 
 
     def test_avisa_si_falta_url_publica(self):
+        """Si alguien la deja vacía a propósito, la vista lo avisa en vez de mentir."""
+        from cuentasclaras.modelos.configuracion import Config
+
+        config = Config(almacen="memoria", cifrado=False, url_publica="")
+        ctx = Contexto(
+            config=config,
+            store=self.store,
+            repo=Repositorio(self.store, config),
+            medios=self.medios,
+            ctrl=streamlit_falso._CookieController(),
+            usuario=self.usuario,
+            token="token",
+            hogar=self.hogar,
+            origen_clave="prueba",
+        )
         codigo = self.repo.invitar(self.hogar["id"], self.usuario["id"])["codigo"]
         streamlit_falso.ESTADO["cc_ultima_invitacion"] = {"codigo": codigo, "expira_en": ""}
-        self.correr(hogar.render, self.ctx)
+        self.correr(hogar.render, ctx)
         avisos = " ".join(str(args[0]) for (args, _) in streamlit_falso.llamadas("warning"))
         self.assertIn("url_publica", avisos)
 
