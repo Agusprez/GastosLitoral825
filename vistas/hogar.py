@@ -157,9 +157,11 @@ def _mensaje_whatsapp(ctx: Contexto, codigo: str, expira_en: str = "") -> None:
     if not url:
         st.warning(
             "El mensaje sale **sin el link de acceso** porque falta `url_publica` en "
-            "los Secretos. Agregá `url_publica = \"https://litoral825.streamlit.app\"` "
-            "y reiniciá la app para que el texto lo incluya."
+            "los Secretos. Agregá esta línea —importante: **antes** de cualquier "
+            "sección entre corchetes, como `[gcp_service_account]`, porque en TOML "
+            "lo que sigue a un encabezado pertenece a esa sección— y reiniciá la app:"
         )
+        st.code('url_publica = "https://litoral825.streamlit.app"', language="toml")
     else:
         st.caption(f"Link de acceso que va en el mensaje: {url}")
 

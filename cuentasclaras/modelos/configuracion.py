@@ -126,6 +126,22 @@ def desde_entorno(entorno: Mapping[str, str] | None = None) -> dict[str, Any]:
     return datos
 
 
+def _ajuste(combinado: Mapping[str, Any], nombre: str) -> Any:
+    """Busca un ajuste en el nivel superior y, si no está, dentro de las secciones.
+
+    Es muy común pegar `url_publica = "..."` al final del archivo de secretos: en
+    TOML, cualquier clave que venga después de un `[encabezado]` pertenece a esa
+    sección, así que termina dentro de `[gcp_service_account]`. En lugar de
+    ignorarla en silencio, la encontramos igual.
+    """
+    if nombre in combinado:
+        return combinado[nombre]
+    for valor in combinado.values():
+        if isinstance(valor, Mapping) and nombre in valor:
+            return valor[nombre]
+    return None
+
+
 def armar(datos: Mapping[str, Any] | None = None) -> Config:
     """Combina secretos + entorno + valores por defecto."""
     combinado: dict[str, Any] = {}
@@ -133,39 +149,38 @@ def armar(datos: Mapping[str, Any] | None = None) -> Config:
     if datos:
         combinado.update({str(k).lower(): v for k, v in datos.items()})
 
+    def ajuste(nombre: str) -> Any:
+        return _ajuste(combinado, nombre)
+
     cfg = Config(
-        app_nombre=_texto(combinado.get("app_nombre"), Config.app_nombre),
-        moneda=_texto(combinado.get("moneda"), Config.moneda),
-        simbolo=_texto(combinado.get("simbolo"), Config.simbolo),
-        almacen=_texto(combinado.get("almacen"), "").lower() or None,
-        medios=_texto(combinado.get("medios"), "").lower() or None,
-        sqlite_ruta=_texto(combinado.get("sqlite_ruta"), Config.sqlite_ruta),
-        hoja_url=_texto(combinado.get("hoja_url") or combinado.get("sheet_url_gastos")),
-        prefijo_hojas=_texto(
-            combinado.get("prefijo_hojas"), Config.prefijo_hojas
-        ).lower(),
+        app_nombre=_texto(ajuste("app_nombre"), Config.app_nombre),
+        moneda=_texto(ajuste("moneda"), Config.moneda),
+        simbolo=_texto(ajuste("simbolo"), Config.simbolo),
+        almacen=_texto(ajuste("almacen"), "").lower() or None,
+        medios=_texto(ajuste("medios"), "").lower() or None,
+        sqlite_ruta=_texto(ajuste("sqlite_ruta"), Config.sqlite_ruta),
+        hoja_url=_texto(ajuste("hoja_url") or ajuste("sheet_url_gastos")),
+        prefijo_hojas=_texto(ajuste("prefijo_hojas"), Config.prefijo_hojas).lower(),
         gcp_credenciales=combinado.get("gcp_credenciales") or combinado.get("gcp_service_account"),
-        medios_dir=_texto(combinado.get("medios_dir"), Config.medios_dir),
-        drive_carpeta_id=_texto(combinado.get("drive_carpeta_id")),
+        medios_dir=_texto(ajuste("medios_dir"), Config.medios_dir),
+        drive_carpeta_id=_texto(ajuste("drive_carpeta_id")),
         imgbb_api_key=_texto(
-            combinado.get("imgbb_api_key") or combinado.get("imgbb") or combinado.get("imgbb_key")
+            ajuste("imgbb_api_key") or ajuste("imgbb") or ajuste("imgbb_key")
         ),
-        max_comprobante_mb=_entero(combinado.get("max_comprobante_mb"), Config.max_comprobante_mb),
-        cifrado=_booleano(combinado.get("cifrado"), True),
+        max_comprobante_mb=_entero(ajuste("max_comprobante_mb"), Config.max_comprobante_mb),
+        cifrado=_booleano(ajuste("cifrado"), True),
         clave_cifrado=_texto(
-            combinado.get("clave_cifrado")
-            or combinado.get("clave")
-            or combinado.get("encryption_key")
+            ajuste("clave_cifrado") or ajuste("clave") or ajuste("encryption_key")
         ),
-        clave_archivo=_texto(combinado.get("clave_archivo"), Config.clave_archivo),
-        admins=_lista(combinado.get("admins")),
-        registro_abierto=_booleano(combinado.get("registro_abierto"), True),
-        url_publica=_texto(combinado.get("url_publica")),
-        soporte_email=_texto(combinado.get("soporte_email"), Config.soporte_email),
-        precio_mensual=_texto(combinado.get("precio_mensual"), Config.precio_mensual),
-        precio_anual=_texto(combinado.get("precio_anual"), Config.precio_anual),
+        clave_archivo=_texto(ajuste("clave_archivo"), Config.clave_archivo),
+        admins=_lista(ajuste("admins")),
+        registro_abierto=_booleano(ajuste("registro_abierto"), True),
+        url_publica=_texto(ajuste("url_publica") or ajuste("app_url")),
+        soporte_email=_texto(ajuste("soporte_email"), Config.soporte_email),
+        precio_mensual=_texto(ajuste("precio_mensual"), Config.precio_mensual),
+        precio_anual=_texto(ajuste("precio_anual"), Config.precio_anual),
         historial_gratis_meses=_entero(
-            combinado.get("historial_gratis_meses"), Config.historial_gratis_meses
+            ajuste("historial_gratis_meses"), Config.historial_gratis_meses
         ),
     )
 

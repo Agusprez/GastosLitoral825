@@ -12,7 +12,7 @@ from cuentasclaras.modelos import cifrado, dinero
 from cuentasclaras.modelos import planes as plans
 from cuentasclaras.modelos import saldos as balances
 from cuentasclaras.modelos.almacen import MemoryStore, SqliteStore
-from cuentasclaras.modelos.configuracion import Config
+from cuentasclaras.modelos.configuracion import Config, armar
 from cuentasclaras.modelos.repositorio import (
     ErrorNegocio,
     LimiteAlcanzado,
@@ -572,6 +572,42 @@ class TestPlanes(unittest.TestCase):
         config = Config()
         self.assertEqual(plans.meses_visibles(plans.GRATIS, config), 12)
         self.assertIsNone(plans.meses_visibles(plans.PRO, config))
+
+
+class TestConfiguracion(unittest.TestCase):
+    """Los secretos se pegan a mano y en TOML el orden importa: toleramos ambos."""
+
+    def test_url_publica_dentro_de_una_seccion(self):
+        # Caso real: pegar la línea al final del archivo la mete en [gcp_service_account].
+        config = armar({"gcp_service_account": {"url_publica": "https://x.app"}})
+        self.assertEqual(config.url_publica, "https://x.app")
+
+    def test_url_publica_de_arriba_gana(self):
+        config = armar(
+            {
+                "url_publica": "https://arriba",
+                "gcp_service_account": {"url_publica": "https://anidada"},
+            }
+        )
+        self.assertEqual(config.url_publica, "https://arriba")
+
+    def test_alias_app_url(self):
+        self.assertEqual(armar({"app_url": "https://y.app"}).url_publica, "https://y.app")
+
+    def test_otros_ajustes_anidados(self):
+        config = armar(
+            {
+                "gcp_service_account": {
+                    "admins": "jefa@x.com",
+                    "imgbb_api_key": "clave",
+                    "soporte_email": "soporte@x.com",
+                }
+            }
+        )
+        self.assertEqual(config.admins, ("jefa@x.com",))
+        self.assertEqual(config.imgbb_api_key, "clave")
+        self.assertEqual(config.soporte_email, "soporte@x.com")
+        self.assertEqual(config.medios, "imgbb")
 
 
 class TestCicloDeVidaHogar(unittest.TestCase):
