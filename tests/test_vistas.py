@@ -148,6 +148,22 @@ class TestVistasApp(BaseVistas):
         self.assertEqual(self.fallos(), [])
 
 
+    def test_hogar_muestra_mensaje_para_whatsapp(self):
+        """Recién generada la invitación, la vista deja el texto listo para copiar."""
+        codigo = self.repo.invitar(self.hogar["id"], self.usuario["id"])["codigo"]
+        streamlit_falso.ESTADO["cc_ultima_invitacion"] = {
+            "codigo": codigo,
+            "expira_en": "",
+        }
+        self.correr(hogar.render, self.ctx)
+
+        textos = [str(args[0]) for (args, _) in streamlit_falso.llamadas("code")]
+        self.assertTrue(any(codigo in texto for texto in textos), textos)
+        enlaces = [args[1] for (args, _) in streamlit_falso.llamadas("link_button")]
+        self.assertTrue(any("wa.me" in str(enlace) for enlace in enlaces), enlaces)
+        self.assertEqual(self.fallos(), [])
+
+
 class TestAdmin(BaseVistas):
     def test_admin(self):
         usuario = self.repo.crear_usuario(

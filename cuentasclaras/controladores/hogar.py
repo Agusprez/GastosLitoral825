@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import quote
 
 from ..modelos import planes
 from ..modelos.repositorio import ROLES_ETIQUETA
@@ -75,6 +76,60 @@ class ControladorHogar(Controlador):
         try:
             self.repo.revocar_invitacion(self.hogar_id, self.usuario_id, invitacion_id)
             return Resultado.exito("Invitación revocada.")
+        except Exception as exc:  # noqa: BLE001
+            return Resultado.error(str(exc))
+
+    def mensaje_invitacion(self, codigo: str, expira_en: str = "") -> Resultado:
+        """Arma el texto listo para pegar en WhatsApp y el link `wa.me`."""
+        try:
+            codigo = (codigo or "").strip().upper()
+            if not codigo:
+                return Resultado.error("Falta el código de invitación.")
+            hogar = self.repo.obtener_hogar(self.usuario_id, self.hogar_id)
+            nombre_hogar = hogar.get("nombre") or "mi hogar"
+            nombre = (self.usuario or {}).get("nombre") or ""
+            url = (self.config.url_publica or "").strip().rstrip("/")
+
+            if url:
+                pasos = (
+                    f"1) Entrá a {url}\n"
+                    "2) Creá tu cuenta (si ya tenés, iniciá sesión)\n"
+                    f"3) Código de invitación: {codigo}"
+                )
+            else:
+                pasos = (
+                    "1) Entrá a la app de Cuentas Claras\n"
+                    "2) Creá tu cuenta (si ya tenés, iniciá sesión)\n"
+                    f"3) Código de invitación: {codigo}"
+                )
+
+            vence = ""
+            if expira_en:
+                try:
+                    from ..modelos.dinero import formatear_fecha
+
+                    vence = f"\n\nEl código vence el {formatear_fecha(expira_en)}."
+                except ValueError:
+                    vence = ""
+
+            mensaje = (
+                f"¡Hola! Te invito a «{nombre_hogar}» en Cuentas Claras "
+                "para llevar juntos los gastos de la casa.\n\n"
+                f"{pasos}{vence}\n\n"
+                "Es gratis y se usa desde el celular, sin instalar nada. "
+                "Cualquier cosa, avisame."
+                + (f"\n— {nombre}" if nombre else "")
+            )
+            enlace = "https://wa.me/?text=" + quote(mensaje)
+            return Resultado.exito(
+                "",
+                {
+                    "mensaje": mensaje,
+                    "enlace": enlace,
+                    "codigo": codigo,
+                    "hogar": nombre_hogar,
+                },
+            )
         except Exception as exc:  # noqa: BLE001
             return Resultado.error(str(exc))
 

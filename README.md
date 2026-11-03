@@ -22,6 +22,7 @@ cifrados. Nació de una app familiar de dos usuarios atada a una planilla de Goo
 | Compras del súper, servicios, salidas | Se cargan en segundos desde el celular, con foto del ticket. |
 | "Yo puse más que vos" | El sistema reparte cada gasto y muestra quién le debe a quién, con el monto exacto. |
 | Varias casas o familias | Cada hogar es independiente y una persona puede pertenecer a varios. |
+| Invitar a alguien | Código de 6 caracteres + mensaje listo para copiar y pegar en WhatsApp (o abrir WhatsApp con el texto cargado). |
 | Comprobantes | Con acceso controlado desde la app. Backend elegible: **imgbb** (el de siempre), Drive privado o disco. |
 | Datos sensibles | Se guardan cifrados; las contraseñas con `scrypt`. |
 

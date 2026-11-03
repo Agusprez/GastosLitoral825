@@ -219,6 +219,41 @@ class TestHogar(Base):
         self.assertTrue(ctl.registrar_pago(self.bruno["id"], self.ana["id"], "100").ok)
         self.assertFalse(ctl.registrar_pago(self.ana["id"], self.ana["id"], "100").ok)
 
+    def test_mensaje_invitacion(self):
+        ctl = self.ctl(ControladorHogar)
+        codigo = ctl.invitar("miembro", 7, 2).datos["codigo"]
+        resultado = ctl.mensaje_invitacion(codigo)
+        self.assertTrue(resultado.ok, resultado.mensaje)
+        datos = resultado.datos
+        self.assertIn(codigo, datos["mensaje"])
+        self.assertIn("Casa", datos["mensaje"])          # nombre del hogar
+        self.assertIn("Ana", datos["mensaje"])           # quién invita
+        self.assertIn("Creá tu cuenta", datos["mensaje"])
+        self.assertTrue(datos["enlace"].startswith("https://wa.me/?text="))
+        self.assertIn(codigo, datos["enlace"])
+
+    def test_mensaje_invitacion_con_vencimiento(self):
+        ctl = self.ctl(ControladorHogar)
+        datos = ctl.mensaje_invitacion("ABC123", "2026-12-31").datos
+        self.assertIn("31/12/2026", datos["mensaje"])
+
+    def test_mensaje_invitacion_usa_la_url_publica(self):
+        config = armar(
+            {
+                "almacen": "memoria",
+                "cifrado": False,
+                "url_publica": "https://litoral825.streamlit.app",
+            }
+        )
+        repo = Repositorio(self.store, config)
+        hogar = repo.obtener_hogar(self.ana["id"], self.hogar["id"])
+        ctl = ControladorHogar(repo, config, self.medios, self.ana, hogar)
+        datos = ctl.mensaje_invitacion("ABC123").datos
+        self.assertIn("litoral825.streamlit.app", datos["mensaje"])
+
+    def test_mensaje_invitacion_sin_codigo(self):
+        self.assertFalse(self.ctl(ControladorHogar).mensaje_invitacion("  ").ok)
+
     def test_eliminar_pide_confirmacion(self):
         ctl = self.ctl(ControladorHogar)
         self.assertFalse(ctl.eliminar("otro nombre").ok)

@@ -105,18 +105,19 @@ def _invitaciones(ctx: Contexto, datos: dict) -> None:
     if enviado:
         resultado = ctx.hogar_ctl().invitar(rol, int(dias), int(usos))
         if resultado.ok:
-            st.session_state["cc_ultima_invitacion"] = (resultado.datos or {}).get("codigo", "")
+            datos_invitacion = resultado.datos or {}
+            st.session_state["cc_ultima_invitacion"] = {
+                "codigo": datos_invitacion.get("codigo", ""),
+                "expira_en": datos_invitacion.get("expira_en", ""),
+            }
             st.rerun()
         else:
             mostrar(resultado)
 
-    codigo = st.session_state.get("cc_ultima_invitacion")
-    if codigo:
-        st.markdown(
-            f'<div class="cc-codigo">{codigo}</div>', unsafe_allow_html=True
-        )
-        st.caption("Pasale este código. La persona lo ingresa al crear su cuenta o en «Unirme».")
-        if st.button("Listo, ocultar código"):
+    ultima = st.session_state.get("cc_ultima_invitacion")
+    if ultima:
+        _mensaje_whatsapp(ctx, ultima.get("codigo", ""), ultima.get("expira_en", ""))
+        if st.button("Listo, ocultar"):
             st.session_state.pop("cc_ultima_invitacion", None)
             st.rerun()
 
@@ -124,6 +125,7 @@ def _invitaciones(ctx: Contexto, datos: dict) -> None:
     if not vigentes:
         st.caption("No hay códigos activos.")
         return
+    st.markdown("#### Códigos activos")
     for invitacion in vigentes:
         col1, col2, col3 = st.columns([2, 2, 1])
         col1.markdown(f"`{invitacion['codigo']}`")
@@ -134,6 +136,33 @@ def _invitaciones(ctx: Contexto, datos: dict) -> None:
         )
         if col3.button("Revocar", key=f"rev_{invitacion['id']}"):
             ejecutar(lambda: ctx.hogar_ctl().revocar(invitacion["id"]))
+        with st.expander(f"📲 Mensaje para WhatsApp · {invitacion['codigo']}"):
+            _mensaje_whatsapp(ctx, invitacion["codigo"], invitacion.get("expira_en", ""))
+
+
+def _mensaje_whatsapp(ctx: Contexto, codigo: str, expira_en: str = "") -> None:
+    """Muestra el código y el mensaje listo para copiar/pegar en WhatsApp."""
+    resultado = ctx.hogar_ctl().mensaje_invitacion(codigo, expira_en)
+    if not resultado.ok:
+        mostrar(resultado)
+        return
+    datos = resultado.datos or {}
+
+    st.markdown(
+        f'<div class="cc-codigo">{datos.get("codigo", codigo)}</div>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "Copiá el mensaje con el ícono de la esquina, o abrí WhatsApp directamente "
+        "con el texto cargado. Si la persona ya tiene cuenta, puede pegar el código "
+        "en «Unirme a otro hogar» (abajo, en esta misma sección)."
+    )
+    st.code(datos.get("mensaje", ""), language=None)
+    st.link_button(
+        "📲 Abrir WhatsApp con este mensaje",
+        datos.get("enlace", "https://wa.me/"),
+        use_container_width=True,
+    )
 
 
 def _ajustes(ctx: Contexto, datos: dict) -> None:
@@ -259,3 +288,23 @@ def render(ctx: Contexto) -> None:
         _ajustes(ctx, datos)
     with tab_actividad:
         _actividad(ctx, datos)
+
+    _unirme(ctx)
+
+
+def _unirme(ctx: Contexto) -> None:
+    """Permite sumarse a otro hogar con un código (para quien ya tiene cuenta)."""
+    st.divider()
+    with st.expander("🔗 Unirme a otro hogar con un código"):
+        st.caption(
+            "Si te invitaron a otra casa, pegá acá el código. Vas a poder cambiar "
+            "de hogar desde la barra lateral."
+        )
+        with st.form("unirme_hogar"):
+            codigo = st.text_input("Código de invitación", placeholder="ABC123")
+            enviado = st.form_submit_button("Unirme", use_container_width=True)
+        if enviado:
+            resultado = ctx.sesion().unirse(ctx.usuario["id"], codigo)
+            if resultado.ok:
+                st.session_state["cc_hogar_id"] = (resultado.datos or {}).get("id", "")
+            aplicar(resultado)
