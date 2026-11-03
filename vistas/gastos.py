@@ -58,6 +58,8 @@ def _formulario(ctx: Contexto, miembros: list[dict[str, Any]]) -> None:
         subido = st.file_uploader(
             "Comprobante (opcional)", type=["jpg", "jpeg", "png", "webp"]
         )
+        if ctx.aviso_medios:
+            st.warning(ctx.aviso_medios)
         enviado = st.form_submit_button(
             "Guardar gasto", type="primary", use_container_width=True
         )

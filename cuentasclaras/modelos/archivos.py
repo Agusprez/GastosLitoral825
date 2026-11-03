@@ -13,10 +13,11 @@ La referencia guardada en el gasto es `local:...`, `drive:<file_id>` o una URL
 
 from __future__ import annotations
 
+import base64
 import io
 import mimetypes
-import os
 import re
+import threading
 import uuid
 from pathlib import Path
 from typing import Any, Mapping
@@ -39,6 +40,10 @@ FIRMAS = (
     (b"\x89PNG\r\n\x1a\n", ".png"),
     (b"RIFF", ".webp"),
 )
+
+# Caché de imágenes bajadas de un servicio externo (imgbb).
+_CACHE_DESCARGAS: dict[str, bytes] = {}
+_CACHE_LOCK = threading.Lock()
 
 
 class ErrorArchivo(Exception):
@@ -202,7 +207,119 @@ class MediosDrive(Medios):
         return "google drive"
 
 
+def _descargar(url: str, cliente: Any, timeout: int) -> bytes | None:
+    """Descarga una imagen remota, con caché en memoria.
+
+    El diálogo del gasto se redibuja en cada interacción: sin caché, abrir un
+    ticket dispararía una descarga por rerun.
+    """
+    with _CACHE_LOCK:
+        if url in _CACHE_DESCARGAS:
+            return _CACHE_DESCARGAS[url]
+    try:
+        respuesta = cliente.get(url, timeout=timeout)
+    except Exception:  # noqa: BLE001 - red caída, DNS, timeout
+        return None
+    if getattr(respuesta, "status_code", 0) != 200:
+        return None
+    contenido = getattr(respuesta, "content", None)
+    if not isinstance(contenido, bytes) or not contenido:
+        return None
+    with _CACHE_LOCK:
+        if len(_CACHE_DESCARGAS) > 64:
+            _CACHE_DESCARGAS.clear()
+        _CACHE_DESCARGAS[url] = contenido
+    return contenido
+
+
+class MediosImgbb(Medios):
+    """Sube los comprobantes a imgbb (el servicio que usaba la versión 1).
+
+    Se conserva `imgbb_api_key` de los secretos, así que migrar no requiere
+    configurar nada nuevo. La referencia guardada es la URL directa de la imagen
+    (`https://i.ibb.co/...`), igual que en la v1: eso hace que los comprobantes
+    históricos se sigan viendo sin conversión.
+
+    Ojo: en imgbb la imagen queda accesible para quien tenga el link (no es
+    privada como Drive o el disco). La app la muestra sólo a las personas del
+    hogar, pero el link no está protegido por contraseña.
+    """
+
+    URL_SUBIDA = "https://api.imgbb.com/1/upload"
+
+    def __init__(self, clave: str, cliente: Any | None = None, timeout: int = 25) -> None:
+        clave = (clave or "").strip()
+        if not clave:
+            raise ErrorArchivo(
+                "Falta `imgbb_api_key` en los secretos: sin esa clave no se pueden "
+                "subir comprobantes a imgbb."
+            )
+        self.clave = clave
+        self._cliente = cliente
+        self.timeout = timeout
+
+    # --- infraestructura ---------------------------------------------------- #
+    def _http(self):
+        if self._cliente is None:
+            try:
+                import requests
+            except ImportError as exc:  # pragma: no cover - depende del despliegue
+                raise ErrorArchivo(
+                    "Falta el paquete `requests` para subir imágenes a imgbb."
+                ) from exc
+            self._cliente = requests
+        return self._cliente
+
+    # --- interfaz ----------------------------------------------------------- #
+    def guardar(self, hogar_id: str, datos: bytes, nombre: str) -> str:
+        ext = validar(datos, nombre)
+        contenido, _mime = optimizar(datos, ext)
+        carga = {
+            "key": self.clave,
+            "image": base64.b64encode(contenido).decode("ascii"),
+        }
+        try:
+            respuesta = self._http().post(self.URL_SUBIDA, data=carga, timeout=self.timeout)
+        except ErrorArchivo:
+            raise
+        except Exception as exc:  # noqa: BLE001 - red caída, timeout, SSL
+            raise ErrorArchivo(f"No se pudo subir la imagen a imgbb: {exc}") from exc
+
+        estado = getattr(respuesta, "status_code", 0)
+        if estado != 200:
+            detalle = ""
+            try:
+                detalle = str(respuesta.json().get("error", {}).get("message", ""))[:160]
+            except Exception:  # noqa: BLE001
+                detalle = str(getattr(respuesta, "text", ""))[:160]
+            raise ErrorArchivo(f"imgbb respondió {estado}. {detalle}".strip())
+
+        try:
+            cuerpo = respuesta.json()
+            info = cuerpo["data"]
+            url = info.get("url") or info.get("display_url") or info.get("image", {}).get("url")
+        except Exception as exc:  # noqa: BLE001
+            raise ErrorArchivo("imgbb devolvió una respuesta que no se entiende.") from exc
+        if not url:
+            raise ErrorArchivo("imgbb no devolvió la URL de la imagen.")
+        return str(url)
+
+    def leer(self, ref: str) -> bytes | None:
+        if tipo(ref) != "http":
+            return None
+        return _descargar(ref, self._http(), self.timeout)
+
+    def borrar(self, ref: str) -> None:
+        """imgbb no permite borrar sin el token de borrado: se deja la imagen."""
+        return None
+
+    def descripcion(self) -> str:
+        return "imgbb"
+
+
 def construir(config: Config) -> Medios:
+    if config.medios == "imgbb":
+        return MediosImgbb(config.imgbb_api_key)
     if config.medios == "drive" and config.gcp_credenciales and config.drive_carpeta_id:
         return MediosDrive(config.gcp_credenciales, config.drive_carpeta_id)
     return MediosLocal(config.medios_dir)

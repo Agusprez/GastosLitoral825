@@ -14,8 +14,11 @@ Consideraciones:
 * **El disco es efímero.** Por eso la base es Google Sheets y no SQLite. Con
   `almacen = "sqlite"` se pierde todo en cada reinicio.
 * La app se duerme tras un rato sin uso; el primer acceso tarda unos segundos.
-* Si usás comprobantes en Drive, verificá que la service account tenga acceso a la
-  carpeta (`drive_carpeta_id`).
+* **Comprobantes:** con `imgbb_api_key` se suben a imgbb (como en la v1) y
+  sobreviven a los reinicios. Con `drive_carpeta_id` van a tu Drive, pero la
+  carpeta tiene que estar compartida con el `client_email` de la service account.
+  Si no configurás ninguno, se guardan en el disco del servidor y **se pierden** al
+  reiniciar: en la nube, elegí imgbb o Drive.
 * No uses el plan gratuito para datos de clientes que paguen: no hay SLA.
 
 ## Opción B — VPS propio (más control)
@@ -108,7 +111,7 @@ Cualquier clave de configuración se puede pasar como `CUENTASCLARAS_*`:
 | `CUENTASCLARAS_CIFRADO` | `0` para desactivar | Sólo pruebas |
 | `CUENTASCLARAS_ADMINS` | `a@x.com,b@x.com` | Panel de plataforma |
 | `CUENTASCLARAS_REGISTRO_ABIERTO` | `0` | Cerrar inscripciones |
-| `CUENTASCLARAS_MEDIOS` | `local` \| `drive` | Comprobantes |
+| `CUENTASCLARAS_MEDIOS` | `imgbb` \| `drive` \| `local` | Comprobantes |
 | `CUENTASCLARAS_DRIVE_CARPETA_ID` | `1AbC…` | Carpeta de Drive |
 | `CUENTASCLARAS_PRECIO_MENSUAL` | `4.900` | Precio mostrado |
 | `CUENTASCLARAS_PRECIO_ANUAL` | `49.000` | Precio mostrado |
@@ -117,6 +120,7 @@ Cualquier clave de configuración se puede pasar como `CUENTASCLARAS_*`:
 ## Checklist antes de abrir al público
 
 - [ ] `clave_cifrado` configurada y guardada fuera del servidor.
+- [ ] Backend de comprobantes elegido: `imgbb_api_key` (persistente) o `drive_carpeta_id` (privado). Si no, se guardan en disco y se pierden al reiniciar.
 - [ ] Planilla compartida **sólo** con la service account.
 - [ ] `admins` con tu email; probaste el panel de plataforma.
 - [ ] `registro_abierto` decidido (abierto o sólo por invitación).
@@ -139,3 +143,5 @@ Cualquier clave de configuración se puede pasar como `CUENTASCLARAS_*`:
 | `APIError: A sheet with the name "gastos" already exists` | Versión anterior con el prefijo sin aplicar. Actualizá a la última: la app usa `cc_*` y renombra solas las pestañas sueltas. Si persiste, revisá que no haya una `cc_gastos` con otro encabezado. |
 | Pestañas `usuarios`, `hogares`… sin prefijo | Las creó esa versión anterior. En el próximo arranque la app las renombra a `cc_usuarios`, `cc_hogares`, etc. conservando los datos. |
 | "La planilla ya tiene una pestaña X con otro formato" | Hay una pestaña con el nombre que la app necesita pero con encabezado ajeno. Renombrala (`X_viejo`) o cambiá `prefijo_hojas`. |
+| "imgbb respondió 400. Invalid API key" | La `imgbb_api_key` no es válida o falta. Revisá los Secrets; mientras tanto los comprobantes se guardan en disco. |
+| Los comprobantes desaparecen después de reiniciar | Están en disco (`medios = "local"`). Configurá `imgbb_api_key` o `drive_carpeta_id`. |

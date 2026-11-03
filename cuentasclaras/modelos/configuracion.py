@@ -64,10 +64,12 @@ class Config:
     prefijo_hojas: str = "cc_"
     gcp_credenciales: Mapping[str, Any] | None = None
 
-    # Comprobantes: "local" (disco) o "drive" (Google Drive privado).
+    # Comprobantes: "imgbb" (servicio externo, como la v1), "drive" (privado en
+    # Google Drive) o "local" (disco del servidor).
     medios: str = "local"
     medios_dir: str = "data/comprobantes"
     drive_carpeta_id: str = ""
+    imgbb_api_key: str = ""
     max_comprobante_mb: int = 5
 
     # Cifrado en reposo de todo lo que se guarda (planilla o SQLite).
@@ -145,6 +147,9 @@ def armar(datos: Mapping[str, Any] | None = None) -> Config:
         gcp_credenciales=combinado.get("gcp_credenciales") or combinado.get("gcp_service_account"),
         medios_dir=_texto(combinado.get("medios_dir"), Config.medios_dir),
         drive_carpeta_id=_texto(combinado.get("drive_carpeta_id")),
+        imgbb_api_key=_texto(
+            combinado.get("imgbb_api_key") or combinado.get("imgbb") or combinado.get("imgbb_key")
+        ),
         max_comprobante_mb=_entero(combinado.get("max_comprobante_mb"), Config.max_comprobante_mb),
         cifrado=_booleano(combinado.get("cifrado"), True),
         clave_cifrado=_texto(
@@ -173,6 +178,13 @@ def armar(datos: Mapping[str, Any] | None = None) -> Config:
         almacen = "sheets" if (cfg.gcp_credenciales and cfg.hoja_url) else "sqlite"
     medios = cfg.medios
     if medios is None:
-        medios = "drive" if (cfg.gcp_credenciales and cfg.drive_carpeta_id) else "local"
+        # Orden de preferencia: imgbb (si hay clave, es lo que ya venían usando),
+        # después Drive (privado) y si no, disco local.
+        if cfg.imgbb_api_key:
+            medios = "imgbb"
+        elif cfg.gcp_credenciales and cfg.drive_carpeta_id:
+            medios = "drive"
+        else:
+            medios = "local"
 
     return replace(cfg, almacen=almacen, medios=medios)

@@ -22,7 +22,7 @@ cifrados. Nació de una app familiar de dos usuarios atada a una planilla de Goo
 | Compras del súper, servicios, salidas | Se cargan en segundos desde el celular, con foto del ticket. |
 | "Yo puse más que vos" | El sistema reparte cada gasto y muestra quién le debe a quién, con el monto exacto. |
 | Varias casas o familias | Cada hogar es independiente y una persona puede pertenecer a varios. |
-| Comprobantes | Quedan privados (disco del servidor o Drive), nunca públicos. |
+| Comprobantes | Con acceso controlado desde la app. Backend elegible: **imgbb** (el de siempre), Drive privado o disco. |
 | Datos sensibles | Se guardan cifrados; las contraseñas con `scrypt`. |
 
 ## Qué cambió respecto de la versión 1
@@ -33,7 +33,7 @@ cifrados. Nació de una app familiar de dos usuarios atada a una planilla de Goo
 | `st.secrets["passwords"]` comparado en texto plano | Hash por usuario + bloqueo tras 5 intentos fallidos |
 | Cookie con el nombre del usuario (se podía editar) | Cookie con token opaco; la sesión vive hasheada en la base y se puede revocar |
 | Una sola planilla, una sola casa | Multi-hogar con roles (propietario/admin/miembro) e invitaciones |
-| Comprobantes en imgbb (link público) | Comprobantes privados con control de acceso |
+| Comprobantes en imgbb, sólo accesibles por link | Se mantiene imgbb (mismo `imgbb_api_key`) pero las imágenes se muestran sólo dentro del hogar; también se puede elegir Drive o disco |
 | Sin planes ni límites | Plan Gratis y Pro con límites aplicados en el modelo |
 | Sin exportación | CSV por período, JSON completo del hogar |
 | Sin tests | 123 tests (modelo, controladores, vistas, cifrado, end-to-end) |
@@ -52,7 +52,7 @@ cuentasclaras/
     autenticacion.py        scrypt, sesiones, bloqueo por intentos
     saldos.py               Reparto de gastos y cálculo de deudas
     planes.py               Planes, límites y precios
-    archivos.py             Comprobantes (disco o Drive)
+    archivos.py             Comprobantes (imgbb, Drive o disco)
     repositorio.py          Reglas de negocio + control de acceso por hogar
     datos_demo.py           Datos de ejemplo
   controladores/            C · casos de uso
@@ -128,7 +128,7 @@ hogares (`TestAislamiento`).
 | Fuerza bruta | 5 intentos → 15 minutos de bloqueo, mensaje genérico (no revela si el email existe). |
 | Robo de cookie | La cookie lleva un token aleatorio; en la base sólo el SHA-256. Se revoca al cerrar sesión o cambiar la contraseña. |
 | Planilla leída por terceros | Cifrado ChaCha20 + HMAC de todos los valores (autenticado: detecta ediciones a mano). |
-| Comprobantes públicos | Se guardan privados y se sirven sólo desde la app, con verificación de membresía. |
+| Comprobantes | Se muestran sólo a integrantes del hogar (verificación de membresía en el controlador). Con imgbb el link directo queda público-no-listado; con Drive o disco, privado. |
 | Fuga entre hogares | Cada operación recibe el usuario y valida membresía antes de tocar datos. |
 | Archivos maliciosos | Se validan formato, firma del archivo y tamaño máximo (5 MB por defecto). |
 
@@ -205,8 +205,12 @@ integración único).
   Con hogares de 2 a 10 personas y cientos de gastos por mes, sobra. Para miles de
   hogares hay que migrar a Postgres (el `Store` es una interfaz: se agrega un
   `PostgresStore` sin tocar el resto).
-* **Comprobantes:** con Drive se guardan en una carpeta privada de la service
-  account; sin Drive, en `data/comprobantes` (entrá al disco del servidor).
+* **Comprobantes:** tres backends, en este orden de prioridad si no se fuerza
+  `medios`: **imgbb** (si hay `imgbb_api_key`, es el servicio de la v1 — la imagen
+  queda con link público-no-listado), **Drive** (privado, en la carpeta que se
+  comparte con la service account) o **disco** (`data/comprobantes`, privado pero
+  efímero en Streamlit Cloud: se pierde al reiniciar).
+  En `docs/DEPLOY.md` está cómo elegir uno u otro.
 
 ## Tests
 

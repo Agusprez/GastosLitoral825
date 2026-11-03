@@ -110,12 +110,29 @@ mejor entre sus hogares (para permitir más de un hogar si alguno es Pro).
 
 ## Comprobantes
 
-* `local`: `data/comprobantes/<hogar>/<uuid>.jpg`, servido sólo por la app.
-* `drive`: sube a una carpeta privada de la service account; se lee con
-  `files().get_media`.
+La interfaz `Medios` tiene tres implementaciones. La elección es automática según
+la configuración (`medios` fuerza una; si no, gana la primera que tenga datos):
+
+1. **`imgbb`** (`imgbb_api_key`) — el servicio de la v1. Sube la imagen por
+   `POST https://api.imgbb.com/1/upload` y guarda la **URL directa** (`https://i.ibb.co/…`)
+   como referencia. Ventaja: los comprobantes históricos se siguen viendo sin
+   conversión y no hay que configurar nada nuevo. Costo: el link es
+   público-no-listado (quien lo tenga, la ve) y no se puede borrar desde la app
+   (imgbb sólo lo permite con el token de borrado que devuelve la subida).
+   Las descargas se cachean en memoria para no pedir la misma imagen en cada rerun.
+2. **`drive`** (`drive_carpeta_id`) — sube a una carpeta privada de la service
+   account; se lee con `files().get_media`. Es la opción privada.
+3. **`local`** (`medios_dir`) — `data/comprobantes/<hogar>/<uuid>.jpg`. Privado,
+   pero en Streamlit Cloud el disco es efímero: se pierde al reiniciar.
+
+Común a los tres:
+
 * Validación: extensión + firma del archivo (JPEG/PNG/WEBP) + 5 MB. Se re-comprimen
   a 1600 px con Pillow si está disponible.
-* Compatibilidad: los links `http…` de la v1 se muestran tal cual (no se descargan).
+* El controlador verifica membresía antes de devolver la imagen, así que la foto
+  sólo se ve desde la app y para el hogar dueño del gasto.
+* Los links `http…` (los de la v1 y los nuevos de imgbb) se leen con `requests` y,
+  si la descarga falla, la vista cae a mostrar la URL remota.
 
 ## Escalabilidad
 

@@ -59,6 +59,7 @@ class Contexto:
     token: str = ""
     hogar: dict[str, Any] | None = None
     origen_clave: str = ""
+    aviso_medios: str = ""
 
     # --- controladores ---------------------------------------------------- #
     def _base(self, clase):
@@ -200,9 +201,14 @@ def arrancar() -> Contexto:
 
     repo = Repositorio(store, config)
     _sembrar_demo(store, config, repo)
+    aviso_medios = ""
     try:
         medios = medios_mod.construir(config)
-    except Exception:  # noqa: BLE001 - si Drive falla, seguimos sin comprobantes
+    except Exception as exc:  # noqa: BLE001 - sin comprobantes la app sigue andando
+        aviso_medios = (
+            f"No se pudieron configurar los comprobantes ({exc}). "
+            "Las imágenes se van a guardar en el disco del servidor."
+        )
         medios = medios_mod.MediosLocal(config.medios_dir)
 
     ctx = Contexto(
@@ -212,6 +218,7 @@ def arrancar() -> Contexto:
         medios=medios,
         ctrl=_cookie_controller(),
         origen_clave=origen_clave,
+        aviso_medios=aviso_medios,
     )
     _restaurar(ctx)
     _resolver_hogar(ctx)
