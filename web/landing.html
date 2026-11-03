@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cuentas Claras · gastos compartidos del hogar</title>
+<meta name="description" content="Cargá quién pagó, dividí automático y sabé al instante quién le debe a quién. Gastos compartidos para parejas, familias y compañeros de casa. Datos cifrados y comprobantes privados.">
+<meta name="theme-color" content="#0f766e">
+<meta property="og:title" content="Cuentas Claras · gastos compartidos del hogar">
+<meta property="og:description" content="Gastos compartidos sin planillas ni discusiones. Quién pagó, cuánto toca a cada uno y qué transferir.">
+<meta property="og:type" content="website">
+<style>
+  :root{
+    --teal:#0f766e; --teal-oscuro:#134e4a; --tinta:#0f172a; --gris:#475569;
+    --fondo:#f8fafc; --borde:#e2e8f0; --ambar:#f59e0b; --blanco:#fff;
+    --radio:16px; --sombra:0 1px 2px rgba(15,23,42,.06),0 8px 24px rgba(15,23,42,.06);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--tinta); background:var(--blanco); line-height:1.55;
+  }
+  a{color:var(--teal); text-decoration:none}
+  a:hover{text-decoration:underline}
+  .contenedor{max-width:1080px; margin:0 auto; padding:0 20px}
+  header{
+    position:sticky; top:0; z-index:10; background:rgba(255,255,255,.92);
+    backdrop-filter:blur(8px); border-bottom:1px solid var(--borde);
+  }
+  .barra{display:flex; align-items:center; justify-content:space-between; height:64px}
+  .marca{display:flex; align-items:center; gap:10px; font-weight:800; font-size:1.1rem; color:var(--tinta)}
+  .marca:hover{text-decoration:none}
+  .logo{
+    width:34px;height:34px;border-radius:10px;display:grid;place-items:center;color:#fff;
+    background:linear-gradient(135deg,var(--teal),var(--teal-oscuro)); font-size:1rem;
+  }
+  nav{display:flex; gap:22px; align-items:center; font-size:.95rem}
+  nav a{color:var(--gris)}
+  .boton{
+    display:inline-block; padding:11px 20px; border-radius:12px; font-weight:700; font-size:.95rem;
+    border:1px solid transparent; transition:transform .06s ease, box-shadow .2s ease;
+  }
+  .boton:hover{text-decoration:none; transform:translateY(-1px)}
+  .boton-primario{background:var(--teal); color:#fff; box-shadow:0 6px 18px rgba(15,118,110,.25)}
+  .boton-secundario{background:#fff; color:var(--tinta); border-color:var(--borde)}
+  .hero{
+    background:linear-gradient(135deg,var(--teal) 0%,var(--teal-oscuro) 55%,var(--tinta) 100%);
+    color:#f8fafc; padding:76px 0 64px;
+  }
+  .hero .contenedor{display:grid; grid-template-columns:1.1fr .9fr; gap:48px; align-items:center}
+  .hero h1{font-size:clamp(2rem,4.2vw,3.1rem); line-height:1.1; margin:0 0 16px}
+  .hero p{color:#d1fae5; font-size:1.08rem; margin:0 0 28px; max-width:46ch}
+  .hero .acciones{display:flex; gap:12px; flex-wrap:wrap}
+  .hero .nota{color:#a7f3d0; font-size:.85rem; margin-top:14px}
+  .tarjeta-demo{
+    background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18);
+    border-radius:var(--radio); padding:20px; backdrop-filter:blur(4px);
+  }
+  .tarjeta-demo h2{font-size:.8rem; text-transform:uppercase; letter-spacing:.12em; color:#99f6e4; margin:0 0 14px}
+  .fila-demo{display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px dashed rgba(255,255,255,.16); font-size:.94rem}
+  .fila-demo:last-child{border-bottom:0}
+  .fila-demo .monto{font-variant-numeric:tabular-nums; font-weight:700}
+  .positivo{color:#6ee7b7}
+  .negativo{color:#fca5a5}
+  section{padding:64px 0}
+  section.gris{background:var(--fondo); border-top:1px solid var(--borde); border-bottom:1px solid var(--borde)}
+  h2.seccion{font-size:1.9rem; margin:0 0 8px; text-align:center}
+  p.glosa{color:var(--gris); text-align:center; margin:0 auto 40px; max-width:60ch}
+  .grilla{display:grid; grid-template-columns:repeat(3,1fr); gap:20px}
+  .grilla-2{display:grid; grid-template-columns:repeat(2,1fr); gap:20px}
+  .caja{
+    background:#fff; border:1px solid var(--borde); border-radius:var(--radio);
+    padding:24px; box-shadow:var(--sombra);
+  }
+  .caja h3{margin:0 0 8px; font-size:1.06rem}
+  .caja p{margin:0; color:var(--gris); font-size:.94rem}
+  .icono{font-size:1.5rem; display:block; margin-bottom:10px}
+  .paso{display:flex; gap:16px; align-items:flex-start}
+  .numero{
+    flex:0 0 34px; height:34px; border-radius:50%; background:#ccfbf1; color:var(--teal-oscuro);
+    display:grid; place-items:center; font-weight:800;
+  }
+  .precio{font-size:2.1rem; font-weight:800; margin:8px 0 2px}
+  .precio small{font-size:.9rem; font-weight:600; color:var(--gris)}
+  .plan{display:flex; flex-direction:column; gap:12px}
+  .plan.destacado{border:2px solid var(--teal); position:relative}
+  .etiqueta{
+    position:absolute; top:-13px; left:24px; background:var(--teal); color:#fff;
+    font-size:.75rem; font-weight:700; padding:4px 10px; border-radius:999px;
+  }
+  .plan ul{margin:0; padding-left:18px; color:var(--gris); font-size:.93rem}
+  .plan li{margin-bottom:6px}
+  .plan .boton{margin-top:auto; text-align:center}
+  .tachado{text-decoration:line-through; color:#94a3b8; font-size:.9rem}
+  details{
+    border:1px solid var(--borde); border-radius:12px; padding:16px 20px; margin-bottom:12px; background:#fff;
+  }
+  details summary{cursor:pointer; font-weight:700; list-style:none}
+  details summary::-webkit-details-marker{display:none}
+  details summary::after{content:"+"; float:right; color:var(--teal); font-weight:800}
+  details[open] summary::after{content:"–"}
+  details p{color:var(--gris); margin:10px 0 0; font-size:.94rem}
+  .cta{
+    background:linear-gradient(135deg,var(--teal-oscuro),var(--tinta)); color:#fff;
+    border-radius:22px; padding:48px 32px; text-align:center; margin:64px auto;
+  }
+  .cta h2{margin:0 0 10px; font-size:1.9rem}
+  .cta p{color:#d1fae5; margin:0 0 24px}
+  footer{border-top:1px solid var(--borde); padding:32px 0; color:var(--gris); font-size:.88rem}
+  footer .contenedor{display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap}
+  @media (max-width:860px){
+    .hero .contenedor{grid-template-columns:1fr}
+    .grilla,.grilla-2{grid-template-columns:1fr}
+    nav a:not(.boton){display:none}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="contenedor barra">
+    <a class="marca" href="#top"><span class="logo">💸</span> Cuentas Claras</a>
+    <nav>
+      <a href="#como">Cómo funciona</a>
+      <a href="#planes">Planes</a>
+      <a href="#preguntas">Preguntas</a>
+      <!-- Reemplazá esta URL por la de tu app desplegada -->
+      <a class="boton boton-primario" href="https://cuentasclaras.streamlit.app">Entrar</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <div class="hero">
+    <div class="contenedor">
+      <div>
+        <h1>Las cuentas de la casa, claras de una vez.</h1>
+        <p>Cargá quién pagó, dividí automático y sabé al instante quién le debe a quién.
+           Sin planillas, sin cuentas a mano y sin discusiones de fin de mes.</p>
+        <div class="acciones">
+          <a class="boton boton-primario" href="https://cuentasclaras.streamlit.app">Crear mi hogar gratis</a>
+          <a class="boton boton-secundario" href="#planes">Ver planes</a>
+        </div>
+        <p class="nota">Gratis hasta 3 personas · Sin tarjeta · Se usa desde el celular</p>
+      </div>
+      <aside class="tarjeta-demo" aria-label="Ejemplo de balance del mes">
+        <h2>Noviembre · Casa San Pedro</h2>
+        <div class="fila-demo"><span>🛒 Súper Coto</span><span class="monto">$48.500</span></div>
+        <div class="fila-demo"><span>💡 Luz</span><span class="monto">$18.200</span></div>
+        <div class="fila-demo"><span>🌐 Internet</span><span class="monto">$21.500</span></div>
+        <div class="fila-demo"><span>Ana</span><span class="monto positivo">+$15.750</span></div>
+        <div class="fila-demo"><span>Bruno</span><span class="monto negativo">−$15.750</span></div>
+        <div class="fila-demo"><span>Transferir</span><span class="monto">Bruno → Ana</span></div>
+      </aside>
+    </div>
+  </div>
+
+  <section>
+    <div class="contenedor">
+      <h2 class="seccion">Pensado para la vida real</h2>
+      <p class="glosa">Sirve igual para una pareja, una familia con hijos o tres amigos
+        compartiendo departamento.</p>
+      <div class="grilla">
+        <article class="caja">
+          <span class="icono">⚖️</span>
+          <h3>División automática</h3>
+          <p>Elegís quién pagó y entre quiénes se divide. Si es un regalo para otra
+             persona, ella queda debiendo el 100%.</p>
+        </article>
+        <article class="caja">
+          <span class="icono">📎</span>
+          <h3>Comprobantes privados</h3>
+          <p>Adjuntás la foto del ticket y queda visible sólo para las personas del
+             hogar. Nunca en un link público.</p>
+        </article>
+        <article class="caja">
+          <span class="icono">🛒</span>
+          <h3>Lista de compras</h3>
+          <p>Lo que falta en la casa, compartido. Cualquiera anota, tilda o borra desde
+             el supermercado.</p>
+        </article>
+        <article class="caja">
+          <span class="icono">📊</span>
+          <h3>Resumen del mes</h3>
+          <p>Total, movimientos y gasto por categoría. Y un solo dato que importa:
+             cuánto transferir y a quién.</p>
+        </article>
+        <article class="caja">
+          <span class="icono">🏡</span>
+          <h3>Varios hogares</h3>
+          <p>Tu casa y la de un familiar, separadas. Cambiás de hogar desde el menú y
+             cada uno ve sólo lo suyo.</p>
+        </article>
+        <article class="caja">
+          <span class="icono">🔒</span>
+          <h3>Datos protegidos</h3>
+          <p>Contraseñas con cifrado fuerte y la información guardada cifrada: sin la
+             clave no se puede leer.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="gris" id="como">
+    <div class="contenedor">
+      <h2 class="seccion">Cómo funciona</h2>
+      <p class="glosa">Tres pasos y ya está funcionando.</p>
+      <div class="grilla">
+        <div class="caja paso">
+          <span class="numero">1</span>
+          <div>
+            <h3>Creá tu hogar</h3>
+            <p>Poné un nombre. Podés tener más de uno y cambiar entre ellos cuando
+               quieras.</p>
+          </div>
+        </div>
+        <div class="caja paso">
+          <span class="numero">2</span>
+          <div>
+            <h3>Sumá a las personas</h3>
+            <p>Con un código de 6 caracteres. No hace falta que nadie cree una
+               contraseña nueva.</p>
+          </div>
+        </div>
+        <div class="caja paso">
+          <span class="numero">3</span>
+          <div>
+            <h3>Cargá y mirá</h3>
+            <p>Quién pagó qué, cuánto toca a cada uno y el monto exacto a
+               transferir.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="planes">
+    <div class="contenedor">
+      <h2 class="seccion">Planes</h2>
+      <p class="glosa">Empezá gratis. Pasate a Pro cuando la casa lo necesite.</p>
+      <div class="grilla">
+        <article class="caja plan">
+          <h3>Gratis</h3>
+          <p class="precio">$0 <small>/ siempre</small></p>
+          <ul>
+            <li>1 hogar</li>
+            <li>Hasta 3 personas</li>
+            <li>200 gastos por mes</li>
+            <li>12 meses de historial</li>
+            <li>Exportar a CSV</li>
+          </ul>
+          <a class="boton boton-secundario" href="https://cuentasclaras.streamlit.app">Empezar gratis</a>
+        </article>
+        <article class="caja plan destacado">
+          <span class="etiqueta">Recomendado</span>
+          <h3>Pro mensual</h3>
+          <p class="precio">$4.900 <small>/ mes por hogar</small></p>
+          <ul>
+            <li>Hasta 5 hogares</li>
+            <li>Hasta 15 personas por hogar</li>
+            <li>Gastos y comprobantes ilimitados</li>
+            <li>Historial completo</li>
+            <li>Soporte prioritario</li>
+          </ul>
+          <a class="boton boton-primario" href="https://cuentasclaras.streamlit.app">Pedir Pro</a>
+        </article>
+        <article class="caja plan">
+          <h3>Pro anual</h3>
+          <p class="precio">$49.000 <small>/ año</small></p>
+          <p class="tachado">$58.800 si pagás mes a mes</p>
+          <ul>
+            <li>Todo lo de Pro</li>
+            <li>Pagás 10 meses en vez de 12</li>
+            <li>Factura anual</li>
+          </ul>
+          <a class="boton boton-secundario" href="https://cuentasclaras.streamlit.app">Pedir anual</a>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="gris" id="preguntas">
+    <div class="contenedor">
+      <h2 class="seccion">Preguntas frecuentes</h2>
+      <p class="glosa">Lo que más nos preguntan antes de probarlo.</p>
+      <details>
+        <summary>¿Sirve para compañeros de casa?</summary>
+        <p>Sí. Cada gasto se divide entre las personas que elijas: podés repartir la
+           compra del súper entre tres y pagar el internet sólo entre dos.</p>
+      </details>
+      <details>
+        <summary>¿Y si pagué algo que era sólo para otra persona?</summary>
+        <p>Al cargar el gasto elegís entre quiénes se divide. Si pagaste un regalo para
+           una sola persona, esa persona queda debiendo el 100%.</p>
+      </details>
+      <details>
+        <summary>¿Necesito instalar algo?</summary>
+        <p>No. Se usa desde el navegador del celular o de la computadora, sin
+           aplicaciones ni planillas.</p>
+      </details>
+      <details>
+        <summary>¿Puedo llevarme mis datos si me voy?</summary>
+        <p>Sí. Desde Mi cuenta podés descargar un CSV de los movimientos y un JSON con
+           todo el hogar.</p>
+      </details>
+      <details>
+        <summary>¿Cómo se paga el plan Pro?</summary>
+        <p>Se coordina por transferencia o link de pago. Apenas se acredita, el hogar
+           pasa a Pro y se mantiene mientras dure la suscripción.</p>
+      </details>
+      <details>
+        <summary>¿Quién puede ver mis gastos?</summary>
+        <p>Sólo las personas de tu hogar. Cada hogar está separado y la información se
+           guarda cifrada.</p>
+      </details>
+    </div>
+  </section>
+
+  <div class="contenedor">
+    <div class="cta">
+      <h2>Probá con la primera compra del mes</h2>
+      <p>Se tarda menos que anotar en el celular y no se pierde nada.</p>
+      <a class="boton boton-primario" href="https://cuentasclaras.streamlit.app">Crear mi hogar gratis</a>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  <div class="contenedor">
+    <span>© <span id="anio">2026</span> Cuentas Claras · hecho en Argentina 🇦🇷</span>
+    <span>
+      <a href="https://cuentasclaras.streamlit.app">Entrar</a> ·
+      <a href="mailto:hola@cuentasclaras.app">hola@cuentasclaras.app</a>
+    </span>
+  </div>
+</footer>
+
+<script>
+  document.getElementById('anio').textContent = new Date().getFullYear();
+</script>
+</body>
+</html>

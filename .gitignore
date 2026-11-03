@@ -1,1 +1,9 @@
-.streamlit
+# Secretos, datos locales y caché
+.streamlit/secrets.toml
+data/
+*.db
+*.db-wal
+*.db-shm
+__pycache__/
+*.pyc
+.env
