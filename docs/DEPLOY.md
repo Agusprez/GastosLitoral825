@@ -136,3 +136,6 @@ Cualquier clave de configuración se puede pasar como `CUENTASCLARAS_*`:
 | Los datos aparecen vacíos después de reiniciar | Estás en Streamlit Cloud con `almacen = "sqlite"` (disco efímero). |
 | "El archivo supera los 5 MB" | Bajá la foto o subí `max_comprobante_mb`. |
 | Las pestañas no aparecen en la planilla | La app las crea al primer uso; verificá que la service account sea Editor. |
+| `APIError: A sheet with the name "gastos" already exists` | Versión anterior con el prefijo sin aplicar. Actualizá a la última: la app usa `cc_*` y renombra solas las pestañas sueltas. Si persiste, revisá que no haya una `cc_gastos` con otro encabezado. |
+| Pestañas `usuarios`, `hogares`… sin prefijo | Las creó esa versión anterior. En el próximo arranque la app las renombra a `cc_usuarios`, `cc_hogares`, etc. conservando los datos. |
+| "La planilla ya tiene una pestaña X con otro formato" | Hay una pestaña con el nombre que la app necesita pero con encabezado ajeno. Renombrala (`X_viejo`) o cambiá `prefijo_hojas`. |

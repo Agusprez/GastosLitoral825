@@ -238,65 +238,173 @@ class SqliteStore(Store):
                 pass
 
 
+def _abrir_libro(url: str, credenciales: Mapping[str, Any]):
+    """Abre la planilla con la cuenta de servicio.
+
+    Aislado en una función para poder testear `SheetsStore` con un libro falso,
+    sin credenciales ni red.
+    """
+    try:
+        import gspread
+        from google.oauth2.service_account import Credentials
+    except ImportError as exc:  # pragma: no cover - depende del despliegue
+        raise ErrorAlmacen(
+            "Faltan dependencias de Google (gspread / google-auth). "
+            "Instalá requirements.txt o usá almacen=sqlite."
+        ) from exc
+
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive",
+    ]
+    try:
+        creds = Credentials.from_service_account_info(dict(credenciales), scopes=scopes)
+        return gspread.authorize(creds).open_by_url(url)
+    except Exception as exc:  # credenciales inválidas, planilla sin permiso, etc.
+        raise ErrorAlmacen(f"No se pudo abrir la planilla: {exc}") from exc
+
+
 class SheetsStore(Store):
     """Google Sheets como base de datos.
 
-    Una pestaña por tabla. Se lee con `get_all_values()` (no `get_all_records()`)
-    para evitar coerciones numéricas de gspread y conservar los textos tal cual
-    se escribieron. Las lecturas se cachean unos segundos porque cada rerun de
+    Una pestaña por tabla, con prefijo (`cc_usuarios`, `cc_gastos`, …) para no
+    chocar con las pestañas de la versión 1 (`Gastos`, `Lista_Compras`).
+
+    Se lee con `get_all_values()` (no con `get_all_records()`) para evitar
+    coerciones numéricas de gspread y conservar los textos tal cual se
+    escribieron. Las lecturas se cachean unos segundos porque cada rerun de
     Streamlit vuelve a pedir todo.
+
+    Compatibilidad: si encuentra una pestaña sin prefijo con **nuestro** esquema
+    (por ejemplo, las que creó una versión anterior con el prefijo sin aplicar),
+    la renombra en vez de duplicarla. Si la pestaña tiene otro formato, nunca la
+    toca: falla con un mensaje claro.
     """
 
     TTL = 5.0
 
-    def __init__(self, url: str, credenciales: Mapping[str, Any]) -> None:
-        try:
-            import gspread
-            from google.oauth2.service_account import Credentials
-        except ImportError as exc:  # pragma: no cover - depende del despliegue
-            raise ErrorAlmacen(
-                "Faltan dependencias de Google (gspread / google-auth). "
-                "Instalá requirements.txt o usá almacen=sqlite."
-            ) from exc
-
-        scopes = [
-            "https://www.googleapis.com/auth/spreadsheets",
-            "https://www.googleapis.com/auth/drive",
-        ]
-        try:
-            creds = Credentials.from_service_account_info(dict(credenciales), scopes=scopes)
-            cliente = gspread.authorize(creds)
-            self._libro = cliente.open_by_url(url)
-        except Exception as exc:  # credenciales inválidas, planilla sin permiso, etc.
-            raise ErrorAlmacen(f"No se pudo abrir la planilla: {exc}") from exc
-
+    def __init__(
+        self,
+        url: str,
+        credenciales: Mapping[str, Any],
+        prefijo: str = "cc_",
+        libro: Any | None = None,
+    ) -> None:
+        self.prefijo = (prefijo or "").strip()
+        self._libro = libro if libro is not None else _abrir_libro(url, credenciales)
         self._cache: dict[str, tuple[float, list[dict[str, str]]]] = {}
+        self._hojas: list[Any] | None = None
         self._lock = threading.RLock()
 
     # --- infraestructura --------------------------------------------------------
 
-    def _hoja(self, tabla: str):
-        import gspread
+    def _titulo(self, tabla: str) -> str:
+        return f"{self.prefijo}{tabla}"
 
-        titulo = tabla
+    def _listar_hojas(self) -> list[Any]:
+        with self._lock:
+            if self._hojas is None:
+                try:
+                    self._hojas = list(self._libro.worksheets())
+                except Exception as exc:  # noqa: BLE001 - red, permisos, cuota
+                    raise ErrorAlmacen(
+                        f"No se pudieron listar las pestañas de la planilla: {exc}"
+                    ) from exc
+            return self._hojas
+
+    def _olvidar_hojas(self) -> None:
+        with self._lock:
+            self._hojas = None
+
+    def _buscar(self, titulo: str):
+        """Busca una pestaña por nombre, sin distinguir mayúsculas/minúsculas."""
+        buscado = titulo.strip().lower()
+        for hoja in self._listar_hojas():
+            if str(getattr(hoja, "title", "")).strip().lower() == buscado:
+                return hoja
+        return None
+
+    def _error_formato(self, tabla: str, titulo: str) -> ErrorAlmacen:
+        return ErrorAlmacen(
+            f"La planilla ya tiene una pestaña «{titulo}» con otro formato. "
+            f"Para no pisarla, la app necesita usar «{self._titulo(tabla)}» con su "
+            f"propio encabezado. Renombrá la pestaña existente (por ejemplo "
+            f"«{titulo}_viejo») o cambiá `prefijo_hojas` en los secretos."
+        )
+
+    def _crear(self, tabla: str):
+        titulo = self._titulo(tabla)
+        existente = self._buscar(titulo)
+        if existente is not None and not self._esquema_propio(tabla, existente):
+            raise self._error_formato(tabla, getattr(existente, "title", titulo))
         try:
-            hoja = self._libro.worksheet(titulo)
-        except gspread.WorksheetNotFound:
             hoja = self._libro.add_worksheet(
                 title=titulo, rows=100, cols=len(TABLAS[tabla]) + 2
             )
+        except Exception as exc:  # noqa: BLE001
+            raise ErrorAlmacen(
+                f"No se pudo crear la pestaña «{titulo}»: {exc}"
+            ) from exc
+        self._olvidar_hojas()
+        return hoja
+
+    def _adoptar(self, tabla: str):
+        """Renombra una pestaña vieja sin prefijo si tiene nuestro esquema."""
+        titulo = self._titulo(tabla)
+        candidata = self._buscar(tabla)
+        if candidata is not None and self._esquema_propio(tabla, candidata):
+            try:
+                candidata.update_title(titulo)
+            except Exception:  # noqa: BLE001 - si no se puede, la creamos aparte
+                return self._crear(tabla)
+            self._olvidar_hojas()
+            encontrada = self._buscar(titulo)
+            if encontrada is not None:
+                return encontrada
+            return candidata
+        return self._crear(tabla)
+
+    def _esquema_propio(self, tabla: str, hoja) -> bool:
+        """¿La pestaña tiene el encabezado de esta tabla (o un prefijo de él)?"""
+        columnas = TABLAS[tabla]
+        try:
+            actuales = [str(c).strip().lower() for c in hoja.row_values(1)]
+        except Exception:  # noqa: BLE001
+            return False
+        actuales = [c for c in actuales if c]
+        if not actuales:
+            return True  # pestaña vacía: es nuestra para inicializar
+        if actuales[0] != columnas[0]:
+            return False
+        return actuales == columnas[: len(actuales)]
+
+    def _hoja(self, tabla: str):
+        titulo = self._titulo(tabla)
+        hoja = self._buscar(titulo)
+        if hoja is None:
+            hoja = self._adoptar(tabla)
+            self._olvidar_hojas()
         self._asegurar_encabezados(tabla, hoja)
         return hoja
 
     def _asegurar_encabezados(self, tabla: str, hoja) -> None:
+        """Completa el encabezado si faltan columnas nuevas; nunca pisa otro formato."""
         columnas = TABLAS[tabla]
         try:
-            actuales = hoja.row_values(1)
-        except Exception:
-            actuales = []
-        actuales = [c.strip() for c in actuales]
-        if actuales[: len(columnas)] != columnas:
+            crudo = hoja.row_values(1)
+        except Exception:  # noqa: BLE001
+            crudo = []
+        actuales = [str(c).strip() for c in crudo]
+        actuales = [c for c in actuales if c]
+        if actuales == columnas:
+            return
+        if not actuales:
             hoja.update(range_name="A1", values=[columnas])
+            return
+        if actuales[0].lower() == columnas[0] and actuales == columnas[: len(actuales)]:
+            hoja.update(range_name="A1", values=[columnas])
+            return
+        raise self._error_formato(tabla, self._titulo(tabla))
 
     def _invalidar(self, tabla: str | None = None) -> None:
         with self._lock:
@@ -371,7 +479,7 @@ class SheetsStore(Store):
         self._invalidar(tabla)
 
     def ping(self) -> str:
-        return f"google sheets · {self._libro.title}"
+        return f"google sheets · {self._libro.title} · pestañas {self.prefijo}*"
 
 
 def abrir(config, memoria: Store | None = None) -> Store:
@@ -385,7 +493,11 @@ def abrir(config, memoria: Store | None = None) -> Store:
             raise ErrorAlmacen(
                 "Almacenamiento 'sheets' requiere hoja_url y gcp_service_account."
             )
-        return SheetsStore(config.hoja_url, config.gcp_credenciales)
+        return SheetsStore(
+            config.hoja_url,
+            config.gcp_credenciales,
+            prefijo=getattr(config, "prefijo_hojas", "cc_"),
+        )
     return SqliteStore(config.sqlite_ruta)
 
 
