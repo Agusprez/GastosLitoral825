@@ -9,7 +9,9 @@ mayúsculas).
 from __future__ import annotations
 
 import unittest
+from unittest import mock
 
+from cuentasclaras.modelos import almacen
 from cuentasclaras.modelos.almacen import TABLAS, ErrorAlmacen, SheetsStore
 from tests.hoja_falsa import LibroFalso
 
@@ -150,6 +152,46 @@ class TestCrud(unittest.TestCase):
             [h["nombre"] for h in self.store.all("hogares")],
             ["Casa Grande", "Depto"],
         )
+
+
+class TestCuota(unittest.TestCase):
+    """El límite de lecturas de Google no debe romper la app."""
+
+    def test_reintenta_cuando_google_limita(self):
+        estado = {"intentos": 0}
+
+        def accion():
+            estado["intentos"] += 1
+            if estado["intentos"] < 3:
+                raise RuntimeError(
+                    "APIError: [429]: Quota exceeded for quota metric 'Read requests'"
+                )
+            return "ok"
+
+        with mock.patch("time.sleep"):
+            self.assertEqual(almacen._con_reintentos(accion, espera=0), "ok")
+        self.assertEqual(estado["intentos"], 3)
+
+    def test_mensaje_claro_si_sigue_limitado(self):
+        def accion():
+            raise RuntimeError("APIError: [429]: Quota exceeded")
+
+        with mock.patch("time.sleep"):
+            with self.assertRaises(almacen.ErrorAlmacen) as contexto:
+                almacen._con_reintentos(accion, intentos=2, espera=0)
+        self.assertIn("limitando", str(contexto.exception))
+        self.assertIn("no se perdió ningún dato", str(contexto.exception))
+
+    def test_otros_errores_no_se_reintentan(self):
+        estado = {"intentos": 0}
+
+        def accion():
+            estado["intentos"] += 1
+            raise RuntimeError("WorksheetNotFound")
+
+        with self.assertRaises(RuntimeError):
+            almacen._con_reintentos(accion, espera=0)
+        self.assertEqual(estado["intentos"], 1)
 
 
 if __name__ == "__main__":

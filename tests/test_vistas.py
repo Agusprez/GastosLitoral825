@@ -440,14 +440,37 @@ class TestImportarDesdeLaApp(BaseVistas):
 
     def setUp(self) -> None:
         super().setUp()
-        pestañas = {
+        self.pestanas = {
             "Gastos": self.GASTOS_V1,
             "Lista_Compras": [{"Elemento": "Yerba", "Quién Anotó": "Ana"}],
         }
-        # El store de test gana la capacidad de leer pestañas ajenas.
-        self.store.leer_pestana = lambda titulo: list(pestañas.get(titulo, []))
+        self.lecturas = 0
 
-    def test_muestra_la_previsualizacion(self):
+        def leer(titulo: str):
+            self.lecturas += 1
+            return list(self.pestanas.get(titulo, []))
+
+        # El store de test gana la capacidad de leer pestañas ajenas.
+        self.store.leer_pestana = leer
+        self.store.buscar_pestana_por_columnas = lambda columnas: None
+
+    def _analizar(self):
+        resultado = self.ctx.hogar_ctl().analizar_importacion()
+        streamlit_falso.ESTADO["cc_import_analisis"] = resultado
+        return resultado
+
+    def test_no_lee_la_planilla_al_entrar(self):
+        """Abrir Hogar no debe consumir la cuota de lecturas de Google."""
+        self.correr(hogar.render, self.ctx)
+        self.assertEqual(self.lecturas, 0)
+
+    def test_ofrece_el_boton_de_analisis(self):
+        self.correr(hogar.render, self.ctx)
+        etiquetas = [str(args[0]) for (args, _) in streamlit_falso.llamadas("button")]
+        self.assertTrue(any("Buscar los datos" in e for e in etiquetas), etiquetas)
+
+    def test_muestra_la_previsualizacion_al_analizar(self):
+        self._analizar()
         self.correr(hogar.render, self.ctx)
         textos = " ".join(str(args[0]) for (args, _) in streamlit_falso.llamadas("markdown"))
         self.assertIn("2 fila(s) en «Gastos»", textos)
@@ -455,6 +478,7 @@ class TestImportarDesdeLaApp(BaseVistas):
         self.assertEqual(self.dolares_peligrosos(), [])
 
     def test_ofrece_mapear_cada_persona(self):
+        self._analizar()
         self.correr(hogar.render, self.ctx)
         etiquetas = [str(args[0]) for (args, _) in streamlit_falso.llamadas("selectbox")]
         self.assertTrue(any("Ana" in e for e in etiquetas), etiquetas)
@@ -462,15 +486,16 @@ class TestImportarDesdeLaApp(BaseVistas):
 
     def test_no_importa_solo_por_entrar(self):
         antes = len(self.repo.gastos(self.hogar["id"], self.usuario["id"]))
+        self._analizar()
         self.correr(hogar.render, self.ctx)
         despues = len(self.repo.gastos(self.hogar["id"], self.usuario["id"]))
         self.assertEqual(antes, despues)
 
     def test_diagnostico_cuando_no_hay_pestanas(self):
         """Sin pestañas viejas, la app muestra lo que ve y cómo apuntar a la otra."""
-        self.store.leer_pestana = lambda titulo: []
-        self.store.buscar_pestana_por_columnas = lambda columnas: None
+        self.pestanas = {}
         self.store.pestanas = lambda: ["cc_gastos", "cc_usuarios", "Gastos 2025"]
+        self._analizar()
         self.correr(hogar.render, self.ctx)
         codigos = " ".join(str(args[0]) for (args, _) in streamlit_falso.llamadas("code"))
         self.assertIn("Gastos 2025", codigos)        # lista de pestañas visibles

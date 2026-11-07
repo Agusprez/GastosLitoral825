@@ -301,6 +301,11 @@ class AlmacenCifrado(Store):
         listar = getattr(self._interno, "pestanas", None)
         return listar() if callable(listar) else []
 
+    def limpiar_cache(self) -> None:
+        limpiar = getattr(self._interno, "limpiar_cache", None)
+        if callable(limpiar):
+            limpiar()
+
     def cerrar(self) -> None:
         cerrar = getattr(self._interno, "cerrar", None)
         if callable(cerrar):

@@ -242,6 +242,34 @@ class SqliteStore(Store):
                 pass
 
 
+def _es_limite(exc: Exception) -> bool:
+    texto = str(exc)
+    return "429" in texto or "Quota" in texto or "quota" in texto
+
+
+def _con_reintentos(accion, intentos: int = 3, espera: float = 1.0):
+    """Ejecuta una llamada a Google reintentando si es un límite de cuota.
+
+    Google Sheets permite ~60 lecturas por minuto por usuario; con varios reruns
+    seguidos se llega fácil. Un reintento corto evita que se caiga la app entera.
+    """
+    ultimo: Exception | None = None
+    for intento in range(intentos):
+        try:
+            return accion()
+        except Exception as exc:  # noqa: BLE001
+            if not _es_limite(exc):
+                raise
+            ultimo = exc
+            if intento < intentos - 1:
+                time.sleep(espera * (2 ** intento))
+    raise ErrorAlmacen(
+        "Google está limitando la cantidad de lecturas de la planilla (límite por "
+        "minuto). Esperá un minuto y recargá: no se perdió ningún dato. "
+        f"Detalle: {ultimo}"
+    )
+
+
 def _abrir_libro(url: str, credenciales: Mapping[str, Any]):
     """Abre la planilla con la cuenta de servicio.
 
@@ -263,7 +291,10 @@ def _abrir_libro(url: str, credenciales: Mapping[str, Any]):
     ]
     try:
         creds = Credentials.from_service_account_info(dict(credenciales), scopes=scopes)
-        return gspread.authorize(creds).open_by_url(url)
+        cliente = gspread.authorize(creds)
+        return _con_reintentos(lambda: cliente.open_by_url(url))
+    except ErrorAlmacen:
+        raise
     except Exception as exc:  # credenciales inválidas, planilla sin permiso, etc.
         raise ErrorAlmacen(f"No se pudo abrir la planilla: {exc}") from exc
 
@@ -271,7 +302,9 @@ def _abrir_libro(url: str, credenciales: Mapping[str, Any]):
 def _filas_de_hoja(hoja) -> list[dict[str, str]]:
     """Convierte una pestaña en filas `{encabezado: valor}`, sin tocar nada."""
     try:
-        valores = hoja.get_all_values()
+        valores = _con_reintentos(lambda: hoja.get_all_values())
+    except ErrorAlmacen:
+        raise
     except Exception as exc:  # noqa: BLE001
         titulo = getattr(hoja, "title", "?")
         raise ErrorAlmacen(f"No se pudo leer la pestaña «{titulo}»: {exc}") from exc
@@ -318,7 +351,7 @@ class SheetsStore(Store):
     toca: falla con un mensaje claro.
     """
 
-    TTL = 5.0
+    TTL = 20.0
 
     def __init__(
         self,
@@ -344,7 +377,9 @@ class SheetsStore(Store):
         with self._lock:
             if self._hojas is None:
                 try:
-                    self._hojas = list(self._libro.worksheets())
+                    self._hojas = list(_con_reintentos(lambda: self._libro.worksheets()))
+                except ErrorAlmacen:
+                    raise
                 except Exception as exc:  # noqa: BLE001 - red, permisos, cuota
                     raise ErrorAlmacen(
                         f"No se pudieron listar las pestañas de la planilla: {exc}"
@@ -451,6 +486,11 @@ class SheetsStore(Store):
                 self._cache.clear()
             else:
                 self._cache.pop(tabla, None)
+
+    def limpiar_cache(self) -> None:
+        """Olvida lo cacheado: la próxima lectura va a Google."""
+        self._invalidar(None)
+        self._olvidar_hojas()
 
     # --- lectura de pestañas ajenas al esquema (migraciones) ---------------- #
     def leer_pestana(self, titulo: str) -> list[dict[str, str]]:

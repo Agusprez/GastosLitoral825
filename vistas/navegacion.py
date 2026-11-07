@@ -74,6 +74,14 @@ def render(ctx: Contexto, paginas: dict[str, str]) -> str:
         st.markdown(f"**{ctx.nombre or 'Cuenta'}**")
         st.caption((ctx.usuario or {}).get("email", ""))
 
+        if ctx.config.almacen == "sheets":
+            if st.button("🔄 Sincronizar", use_container_width=True, key="btn_sync"):
+                limpiar = getattr(ctx.store, "limpiar_cache", None)
+                if callable(limpiar):
+                    limpiar()
+                st.rerun()
+            st.caption("Trae los últimos cambios de la planilla.")
+
         if st.button("Cerrar sesión", use_container_width=True):
             salir(ctx)
 

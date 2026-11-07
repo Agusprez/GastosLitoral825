@@ -242,11 +242,18 @@ def _ajustes(ctx: Contexto, datos: dict) -> None:
 
 
 def _importar_v1(ctx: Contexto) -> None:
-    """Trae las pestañas de la v1 (`Gastos`, `Lista_Compras`) al hogar activo."""
+    """Trae las pestañas de la v1 al hogar activo.
+
+    Ojo: `st.tabs` ejecuta todas las pestañas en cada rerun, así que acá NO se
+    consulta la planilla automáticamente (eso agotaba la cuota de lecturas de
+    Google). El análisis se hace sólo cuando se aprieta el botón y queda guardado
+    en la sesión.
+    """
     with st.expander("📥 Importar los gastos de la planilla anterior"):
         st.caption(
-            "Trae al hogar las pestañas viejas «Gastos» y «Lista_Compras» de la misma "
-            "planilla. No borra ni modifica esas pestañas: sólo lee."
+            "Trae al hogar las pestañas viejas de la misma planilla («Gastos», "
+            "«Lista_Compras» o las que tengan esas columnas). No borra ni modifica "
+            "nada: sólo lee."
         )
 
         ultimo = st.session_state.pop("cc_import_informe", None)
@@ -262,13 +269,32 @@ def _importar_v1(ctx: Contexto) -> None:
             if len(ultimo.errores) > 5:
                 st.caption(f"· y {len(ultimo.errores) - 5} aviso(s) más")
 
-        analisis = ctx.hogar_ctl().analizar_importacion()
+        guardado = st.session_state.get("cc_import_analisis")
+        if guardado is None:
+            st.caption(
+                "Se lee la planilla una sola vez, al apretar el botón, para no "
+                "consumir el límite de lecturas de Google."
+            )
+            if st.button("🔍 Buscar los datos de la planilla anterior", type="primary"):
+                with st.spinner("Leyendo las pestañas…"):
+                    analisis = ctx.hogar_ctl().analizar_importacion()
+                st.session_state["cc_import_analisis"] = analisis
+                st.rerun()
+            return
+
+        analisis = guardado
         if not analisis.ok:
             mostrar(analisis)
+            if st.button("Volver a intentar"):
+                st.session_state.pop("cc_import_analisis", None)
+                st.rerun()
             return
         info = analisis.datos or {}
         if not info.get("filas") and not info.get("compras"):
             _sin_pestanas(ctx, info)
+            if st.button("Volver a buscar"):
+                st.session_state.pop("cc_import_analisis", None)
+                st.rerun()
             return
 
         informe = info["informe"]
@@ -334,6 +360,7 @@ def _importar_v1(ctx: Contexto) -> None:
             resultado = ctx.hogar_ctl().importar_v1(mapeo, por_defecto)
             if resultado.ok:
                 st.session_state["cc_import_informe"] = resultado.datos
+                st.session_state.pop("cc_import_analisis", None)
             aplicar(resultado)
 
 
