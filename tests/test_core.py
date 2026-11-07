@@ -620,6 +620,46 @@ class TestConfiguracion(unittest.TestCase):
         self.assertIsNone(config.gcp_credenciales)
         self.assertEqual(config.almacen, "sqlite")
 
+    def test_variables_de_entorno_sin_prefijo(self):
+        """Hugging Face Spaces inyecta los secretos con el nombre exacto."""
+        from cuentasclaras.modelos.configuracion import desde_entorno
+
+        datos = desde_entorno(
+            {
+                "sheet_url_gastos": "https://docs.google.com/spreadsheets/d/x/edit",
+                "imgbb_api_key": "clave-imgbb",
+                "CUENTASCLARAS_ADMINS": "yo@x.com",
+                "PATH": "/usr/bin",
+                "HOME": "/home/user",
+            }
+        )
+        self.assertEqual(datos["sheet_url_gastos"], "https://docs.google.com/spreadsheets/d/x/edit")
+        self.assertEqual(datos["imgbb_api_key"], "clave-imgbb")
+        self.assertEqual(datos["admins"], "yo@x.com")
+        self.assertNotIn("path", datos)
+        self.assertNotIn("home", datos)
+
+    def test_credenciales_armadas_con_partes(self):
+        config = armar(
+            {
+                "hoja_url": "https://docs.google.com/spreadsheets/d/x/edit",
+                "gcp_client_email": "bot@proyecto.iam.gserviceaccount.com",
+                "gcp_private_key": "-----BEGIN PRIVATE KEY-----\\nMIIE...\\n-----END PRIVATE KEY-----",
+                "gcp_project_id": "proyecto",
+            }
+        )
+        self.assertIsInstance(config.gcp_credenciales, dict)
+        self.assertEqual(
+            config.gcp_credenciales["client_email"], "bot@proyecto.iam.gserviceaccount.com"
+        )
+        self.assertIn("\n", config.gcp_credenciales["private_key"])  # "\n" literales
+        self.assertEqual(config.gcp_credenciales["project_id"], "proyecto")
+        self.assertEqual(config.almacen, "sheets")
+
+    def test_partes_incompletas_no_arman_credenciales(self):
+        config = armar({"gcp_client_email": "bot@x.iam.gserviceaccount.com"})
+        self.assertIsNone(config.gcp_credenciales)
+
     def test_otros_ajustes_anidados(self):
         config = armar(
             {

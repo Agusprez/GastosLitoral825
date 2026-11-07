@@ -1,9 +1,25 @@
+---
+title: Cuentas Claras
+emoji: 💸
+colorFrom: teal
+colorTo: green
+sdk: streamlit
+sdk_version: 1.37.0
+app_file: app.py
+pinned: false
+short_description: Gastos compartidos del hogar, sin planillas
+---
+
 # Cuentas Claras 💸
 
 Gestión de **gastos compartidos del hogar** lista para ofrecerse como servicio:
 varias personas, varios hogares, planes, límites, comprobantes privados y datos
 cifrados. Nació de una app familiar de dos usuarios atada a una planilla de Google
 (ver [`legacy/`](legacy/)) y ahora es un producto multiusuario.
+
+> La cabecera YAML de arriba es la que necesita **Hugging Face Spaces** para
+> levantar el repo como app. En GitHub se muestra como una tabla chiquita; no
+> afecta nada. Pasos en [`docs/HUGGINGFACE.md`](docs/HUGGINGFACE.md).
 
 * **Base de datos:** Google Sheets (la misma planilla de siempre, en pestañas
   propias `cc_*`), o SQLite para desarrollo.

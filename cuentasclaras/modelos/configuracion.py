@@ -15,6 +15,23 @@ from typing import Any, Mapping
 # Prefijo de las variables de entorno. Sirve para despliegues tipo Docker/Render.
 PREFIJO = "CUENTASCLARAS_"
 
+# Nombres de variable sin prefijo que también se aceptan (secretos de la v1 y de
+# paneles como el de Hugging Face, que no permiten cambiar el nombre).
+NOMBRES_DIRECTOS = {
+    "sheet_url_gastos",
+    "hoja_url",
+    "gcp_service_account",
+    "gcp_credenciales",
+    "gcp_client_email",
+    "gcp_private_key",
+    "gcp_project_id",
+    "imgbb_api_key",
+    "clave_cifrado",
+    "drive_carpeta_id",
+    "url_publica",
+    "admins",
+}
+
 
 def _texto(valor: Any, defecto: str = "") -> str:
     if valor is None:
@@ -121,13 +138,49 @@ class Config:
 
 
 def desde_entorno(entorno: Mapping[str, str] | None = None) -> dict[str, Any]:
-    """Lee las variables de entorno con prefijo CUENTASCLARAS_."""
+    """Lee variables de entorno con prefijo `CUENTASCLARAS_`.
+
+    Además acepta un puñado de nombres sin prefijo porque así se llaman los
+    secretos que ya existían en la versión 1 y porque los hosts tipo Hugging Face
+    Spaces inyectan cada secreto con el nombre exacto que se le puso.
+    """
     entorno = entorno if entorno is not None else os.environ
     datos: dict[str, Any] = {}
     for clave, valor in entorno.items():
-        if not clave.upper().startswith(PREFIJO):
-            continue
-        datos[clave[len(PREFIJO):].lower()] = valor
+        if clave.upper().startswith(PREFIJO):
+            datos[clave[len(PREFIJO):].lower()] = valor
+        elif clave.lower() in NOMBRES_DIRECTOS:
+            datos[clave.lower()] = valor
+    return datos
+
+
+def _credenciales_desde_partes(combinado: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Arma la service account a partir de sus partes.
+
+    Muchos hosts limitan el tamaño de un secreto; el JSON completo de Google ronda
+    los 2,4 KB por la `private_key`. Con estas dos variables alcanza.
+    """
+    correo = _texto(
+        combinado.get("gcp_client_email") or combinado.get("client_email")
+    )
+    clave = str(
+        combinado.get("gcp_private_key") or combinado.get("private_key") or ""
+    ).strip()
+    if not (correo and clave):
+        return None
+    # En un panel web es común pegar la clave con "\n" literales.
+    clave = clave.replace("\\n", "\n")
+    if "BEGIN PRIVATE KEY" not in clave:
+        return None
+    datos = {
+        "type": "service_account",
+        "client_email": correo,
+        "private_key": clave,
+        "token_uri": "https://oauth2.googleapis.com/token",
+    }
+    proyecto = _texto(combinado.get("gcp_project_id") or combinado.get("project_id"))
+    if proyecto:
+        datos["project_id"] = proyecto
     return datos
 
 
@@ -185,7 +238,8 @@ def armar(datos: Mapping[str, Any] | None = None) -> Config:
         prefijo_hojas=_texto(ajuste("prefijo_hojas"), Config.prefijo_hojas).lower(),
         gcp_credenciales=_json_o_texto(
             combinado.get("gcp_credenciales") or combinado.get("gcp_service_account")
-        ),
+        )
+        or _credenciales_desde_partes(combinado),
         medios_dir=_texto(ajuste("medios_dir"), Config.medios_dir),
         drive_carpeta_id=_texto(ajuste("drive_carpeta_id")),
         imgbb_api_key=_texto(

@@ -311,5 +311,21 @@ class TestCodificacion(unittest.TestCase):
         self.assertEqual(problemas, [])
 
 
+class TestEspacioHuggingFace(unittest.TestCase):
+    """El repo tiene que seguir sirviendo como Space (cabecera YAML en el README)."""
+
+    def test_readme_con_metadatos_de_space(self):
+        raiz = Path(__file__).resolve().parent.parent
+        texto = (raiz / "README.md").read_text(encoding="utf-8")
+        self.assertTrue(
+            texto.startswith("---"), "el README debe empezar con la cabecera YAML"
+        )
+        cabecera = texto.split("---", 2)[1]
+        for clave in ("sdk: streamlit", "app_file: app.py", "sdk_version:"):
+            self.assertIn(clave, cabecera)
+        self.assertTrue((raiz / "app.py").exists())
+        self.assertTrue((raiz / "requirements.txt").exists())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
