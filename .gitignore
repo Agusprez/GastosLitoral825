@@ -1,6 +1,7 @@
 # Secretos, datos locales y caché
 .streamlit/secrets.toml
 data/
+datos_privados/
 *.db
 *.db-wal
 *.db-shm
