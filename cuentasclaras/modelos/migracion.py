@@ -33,6 +33,10 @@ ALIAS = {
 PESTANA_GASTOS = "Gastos"
 PESTANA_COMPRAS = "Lista_Compras"
 
+# Columnas que identifican cada pestaña, para encontrarlas aunque el nombre cambie.
+COLUMNAS_GASTOS = ("fecha", "quien", "concepto", "monto")
+COLUMNAS_COMPRAS = ("elemento",)
+
 
 @dataclass
 class Informe:

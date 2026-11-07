@@ -268,6 +268,39 @@ def _abrir_libro(url: str, credenciales: Mapping[str, Any]):
         raise ErrorAlmacen(f"No se pudo abrir la planilla: {exc}") from exc
 
 
+def _filas_de_hoja(hoja) -> list[dict[str, str]]:
+    """Convierte una pestaña en filas `{encabezado: valor}`, sin tocar nada."""
+    try:
+        valores = hoja.get_all_values()
+    except Exception as exc:  # noqa: BLE001
+        titulo = getattr(hoja, "title", "?")
+        raise ErrorAlmacen(f"No se pudo leer la pestaña «{titulo}»: {exc}") from exc
+    if len(valores) < 2:
+        return []
+    encabezados = [str(c).strip() for c in valores[0]]
+    filas: list[dict[str, str]] = []
+    for cruda in valores[1:]:
+        if not any(str(c).strip() for c in cruda):
+            continue
+        fila = {
+            encabezados[i]: (cruda[i] if i < len(cruda) else "")
+            for i in range(len(encabezados))
+            if encabezados[i]
+        }
+        if any(str(v).strip() for v in fila.values()):
+            filas.append(fila)
+    return filas
+
+
+def _leer_hoja_de(libro, titulo: str) -> list[dict[str, str]]:
+    """Busca una pestaña por nombre (sin distinguir mayúsculas) y la lee."""
+    buscado = str(titulo or "").strip().lower()
+    for hoja in libro.worksheets():
+        if str(getattr(hoja, "title", "")).strip().lower() == buscado:
+            return _filas_de_hoja(hoja)
+    return []
+
+
 class SheetsStore(Store):
     """Google Sheets como base de datos.
 
@@ -295,6 +328,8 @@ class SheetsStore(Store):
         libro: Any | None = None,
     ) -> None:
         self.prefijo = (prefijo or "").strip()
+        self._credenciales = dict(credenciales or {})
+        self._url = url
         self._libro = libro if libro is not None else _abrir_libro(url, credenciales)
         self._cache: dict[str, tuple[float, list[dict[str, str]]]] = {}
         self._hojas: list[Any] | None = None
@@ -427,31 +462,43 @@ class SheetsStore(Store):
         hoja = self._buscar(titulo)
         if hoja is None:
             return []
-        try:
-            valores = hoja.get_all_values()
-        except Exception as exc:  # noqa: BLE001
-            raise ErrorAlmacen(
-                f"No se pudo leer la pestaña «{titulo}»: {exc}"
-            ) from exc
-        if len(valores) < 2:
-            return []
-        encabezados = [str(c).strip() for c in valores[0]]
-        filas: list[dict[str, str]] = []
-        for cruda in valores[1:]:
-            if not any(str(c).strip() for c in cruda):
-                continue
-            fila = {
-                encabezados[i]: (cruda[i] if i < len(cruda) else "")
-                for i in range(len(encabezados))
-                if encabezados[i]
-            }
-            if any(str(v).strip() for v in fila.values()):
-                filas.append(fila)
-        return filas
+        return _filas_de_hoja(hoja)
 
     def pestanas(self) -> list[str]:
         """Nombres de todas las pestañas de la planilla."""
         return [str(getattr(hoja, "title", "")) for hoja in self._listar_hojas()]
+
+    def leer_pestana_externa(self, titulo: str, url: str) -> list[dict[str, str]]:
+        """Lee una pestaña de OTRA planilla (la de la v1), sin modificarla.
+
+        Sirve cuando los datos viejos quedaron en un archivo distinto al que usa la
+        app (por ejemplo, si al armar la v2 se hizo una copia de la planilla).
+        """
+        libro = _abrir_libro(url, self._credenciales or {})
+        return _leer_hoja_de(libro, titulo)
+
+    def buscar_pestana_por_columnas(self, columnas: Iterable[str]) -> tuple[str, list[dict[str, str]]] | None:
+        """Busca una pestaña por el contenido de su encabezado, no por su nombre.
+
+        Devuelve `(titulo, filas)` de la primera pestaña que tenga todas esas
+        columnas, salteando las pestañas propias (las del prefijo `cc_`). Así se
+        encuentran los datos de la v1 aunque la pestaña se llame «Gastos 2025» o
+        «Hoja 1».
+        """
+        buscadas = [str(c).strip().lower() for c in columnas if str(c).strip()]
+        if not buscadas:
+            return None
+        for hoja in self._listar_hojas():
+            titulo = str(getattr(hoja, "title", ""))
+            if self.prefijo and titulo.lower().startswith(self.prefijo.lower()):
+                continue
+            try:
+                encabezados = [str(c).strip().lower() for c in hoja.row_values(1)]
+            except Exception:  # noqa: BLE001 - pestaña ilegible: seguimos
+                continue
+            if all(columna in encabezados for columna in buscadas):
+                return titulo, _filas_de_hoja(hoja)
+        return None
 
     def _valores(self, tabla: str) -> list[dict[str, str]]:
         hoja = self._hoja(tabla)

@@ -669,6 +669,14 @@ class TestConfiguracion(unittest.TestCase):
         config = armar({"gcp_client_email": "bot@x.iam.gserviceaccount.com"})
         self.assertIsNone(config.gcp_credenciales)
 
+    def test_planilla_vieja_en_otro_archivo(self):
+        config = armar({"almacen": "memoria", "hoja_url_legacy": "https://vieja"})
+        self.assertEqual(config.hoja_url_legacy, "https://vieja")
+        self.assertEqual(
+            armar({"almacen": "memoria", "sheet_url_legacy": "https://otra"}).hoja_url_legacy,
+            "https://otra",
+        )
+
     def test_otros_ajustes_anidados(self):
         config = armar(
             {

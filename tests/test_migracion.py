@@ -30,12 +30,33 @@ COMPRAS_V1 = [
 class StoreConPestanas(MemoryStore):
     """MemoryStore con pestañas ajenas al esquema (como Google Sheets)."""
 
-    def __init__(self, pestanas: dict[str, list[dict[str, str]]]) -> None:
+    def __init__(
+        self,
+        pestanas: dict[str, list[dict[str, str]]],
+        externa: dict[str, list[dict[str, str]]] | None = None,
+    ) -> None:
         super().__init__()
         self._pestanas = pestanas
+        self._externa = externa or {}
 
     def leer_pestana(self, titulo: str) -> list[dict[str, str]]:
         return [dict(f) for f in self._pestanas.get(titulo, [])]
+
+    def leer_pestana_externa(self, titulo: str, url: str) -> list[dict[str, str]]:
+        return [dict(f) for f in self._externa.get(titulo, [])]
+
+    def buscar_pestana_por_columnas(self, columnas):
+        buscadas = [str(c).strip().lower() for c in columnas]
+        for titulo, filas in self._pestanas.items():
+            if not filas:
+                continue
+            encabezados = [str(k).strip().lower() for k in filas[0]]
+            if all(columna in encabezados for columna in buscadas):
+                return titulo, [dict(f) for f in filas]
+        return None
+
+    def pestanas(self) -> list[str]:
+        return sorted(self._pestanas)
 
 
 class Base(unittest.TestCase):
@@ -139,6 +160,79 @@ class TestControladorImportacion(Base):
         resultado = self.ctl().analizar_importacion()
         self.assertTrue(resultado.ok)
         self.assertIn("no encontramos", resultado.mensaje.lower())
+        self.assertEqual(resultado.datos["pestanas"], [])
+
+
+class TestPestanaConOtroNombre(Base):
+    """El nombre de la pestaña puede ser otro: se reconoce por las columnas."""
+
+    def test_encuentra_por_encabezados(self):
+        self.store._pestanas = {
+            "cc_gastos": [{"id": "x", "fecha": "2026-10-01", "monto": "1"}],
+            "Gastos 2025": GASTOS_V1,
+            "Compras de la casa": COMPRAS_V1,
+        }
+        resultado = self.ctl().analizar_importacion()
+        self.assertTrue(resultado.ok, resultado.mensaje)
+        self.assertEqual(resultado.datos["origen"], "por_columnas")
+        self.assertEqual(resultado.datos["filas"], len(GASTOS_V1))
+
+    def test_no_confunde_las_pestanas_propias(self):
+        """`cc_gastos` no debe tomarse como planilla vieja."""
+        self.store._pestanas = {
+            "cc_gastos": [
+                {"fecha": "2026-10-01", "concepto": "Algo", "monto": "100"}
+            ]
+        }
+        resultado = self.ctl().analizar_importacion()
+        self.assertEqual(resultado.datos["filas"], 0)
+
+
+class TestPlanillaExterna(Base):
+    """Los datos viejos pueden estar en otra planilla (copia de la original)."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.store._pestanas = {}  # la planilla de la app no las tiene
+        self.store._externa = {
+            migracion.PESTANA_GASTOS: GASTOS_V1,
+            migracion.PESTANA_COMPRAS: COMPRAS_V1,
+        }
+        self.config_externa = armar(
+            {
+                "almacen": "memoria",
+                "cifrado": False,
+                "hoja_url_legacy": "https://docs.google.com/spreadsheets/d/vieja/edit",
+            }
+        )
+
+    def _ctl(self):
+        return ControladorHogar(
+            self.repo,
+            self.config_externa,
+            None,
+            self.agustin,
+            self.repo.obtener_hogar(self.agustin["id"], self.hogar["id"]),
+        )
+
+    def test_lee_de_la_planilla_configurada(self):
+        resultado = self._ctl().analizar_importacion()
+        self.assertTrue(resultado.ok, resultado.mensaje)
+        self.assertEqual(resultado.datos["origen"], "externa")
+        self.assertEqual(resultado.datos["filas"], len(GASTOS_V1))
+
+    def test_importa_desde_la_externa(self):
+        ctl = self._ctl()
+        mapeo = ctl.analizar_importacion().datos["mapeo"]
+        resultado = ctl.importar_v1(mapeo, por_defecto=self.agustin["id"])
+        self.assertTrue(resultado.ok, resultado.mensaje)
+        self.assertEqual(resultado.datos.importados, 4)
+
+    def test_sin_configurar_la_externa_no_hay_nada(self):
+        resultado = self.ctl().analizar_importacion()
+        self.assertTrue(resultado.ok)
+        self.assertEqual(resultado.datos["filas"], 0)
+        self.assertEqual(resultado.datos["origen"], "")
 
 
 if __name__ == "__main__":

@@ -26,6 +26,13 @@ en tu computadora:
 
 Detalles:
 
+* La app busca las pestañas por nombre y, si no aparecen, **por sus columnas**
+  (`Fecha, Quien, Concepto, Monto`), así las encuentra aunque se llamen «Gastos 2025»
+  o estén en otra hoja del mismo archivo.
+* Si los datos viejos están en **otra planilla**, agregá su URL en los Secretos como
+  `hoja_url_legacy = "https://docs.google.com/spreadsheets/d/.../edit"` (la cuenta de
+  servicio necesita acceso de lectura). La app te muestra qué pestañas ve, para que
+  puedas confirmar.
 * Los gastos entran **repartidos en partes iguales** entre las personas del hogar,
   que es la regla que usaba la v1 ("mitad y mitad" al cerrar el mes).
 * Los links de comprobantes de la v1 se conservan tal cual (se ven, no se descargan).

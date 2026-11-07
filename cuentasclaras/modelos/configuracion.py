@@ -79,6 +79,8 @@ class Config:
 
     # Google (base de datos y, opcionalmente, comprobantes).
     hoja_url: str = ""
+    # Planilla anterior (v1), si los datos viejos quedaron en otro archivo.
+    hoja_url_legacy: str = ""
     prefijo_hojas: str = "cc_"
     gcp_credenciales: Mapping[str, Any] | None = None
 
@@ -235,6 +237,11 @@ def armar(datos: Mapping[str, Any] | None = None) -> Config:
         medios=_texto(ajuste("medios"), "").lower() or None,
         sqlite_ruta=_texto(ajuste("sqlite_ruta"), Config.sqlite_ruta),
         hoja_url=_texto(ajuste("hoja_url") or ajuste("sheet_url_gastos")),
+        hoja_url_legacy=_texto(
+            ajuste("hoja_url_legacy")
+            or ajuste("sheet_url_legacy")
+            or ajuste("hoja_url_v1")
+        ),
         prefijo_hojas=_texto(ajuste("prefijo_hojas"), Config.prefijo_hojas).lower(),
         gcp_credenciales=_json_o_texto(
             combinado.get("gcp_credenciales") or combinado.get("gcp_service_account")

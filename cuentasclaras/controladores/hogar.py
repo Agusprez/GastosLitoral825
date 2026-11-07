@@ -62,14 +62,57 @@ class ControladorHogar(Controlador):
             return []
 
     # --- importación de la planilla vieja (v1) ---------------------------- #
-    def _pestanas_v1(self) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
-        leer = getattr(self.repo.store, "leer_pestana", None)
+    def _pestanas_v1(self) -> tuple[list[dict[str, str]], list[dict[str, str]], str]:
+        """Devuelve (gastos, compras, origen) leyendo la planilla de la v1.
+
+        Primero busca las pestañas por nombre; si no las encuentra, las busca por
+        los encabezados (`Fecha, Quien, Concepto, Monto`), así funciona aunque la
+        pestaña se llame distinto. Si tampoco están y hay `hoja_url_legacy`
+        configurada, las busca en esa otra planilla.
+        """
+        store = self.repo.store
+        leer = getattr(store, "leer_pestana", None)
         if not callable(leer):
-            return [], []
-        return (
-            leer(migracion.PESTANA_GASTOS),
-            leer(migracion.PESTANA_COMPRAS),
-        )
+            return [], [], ""
+        gastos = leer(migracion.PESTANA_GASTOS)
+        compras = leer(migracion.PESTANA_COMPRAS)
+        if gastos or compras:
+            return gastos, compras, "actual"
+
+        buscar = getattr(store, "buscar_pestana_por_columnas", None)
+        if callable(buscar):
+            try:
+                encontrada = buscar(migracion.COLUMNAS_GASTOS)
+                if encontrada:
+                    _titulo, gastos = encontrada
+                encontrada = buscar(migracion.COLUMNAS_COMPRAS)
+                if encontrada:
+                    _titulo, compras = encontrada
+            except Exception:  # noqa: BLE001
+                gastos, compras = [], []
+            if gastos or compras:
+                return gastos, compras, "por_columnas"
+
+        legacy = (getattr(self.config, "hoja_url_legacy", "") or "").strip()
+        leer_externa = getattr(store, "leer_pestana_externa", None)
+        if legacy and callable(leer_externa):
+            try:
+                gastos = leer_externa(migracion.PESTANA_GASTOS, legacy)
+                compras = leer_externa(migracion.PESTANA_COMPRAS, legacy)
+            except Exception:  # noqa: BLE001 - planilla sin permiso, URL mala
+                return [], [], "externa_error"
+            if gastos or compras:
+                return gastos, compras, "externa"
+        return [], [], ""
+
+    def _pestanas_visibles(self) -> list[str]:
+        listar = getattr(self.repo.store, "pestanas", None)
+        if not callable(listar):
+            return []
+        try:
+            return sorted(listar())
+        except Exception:  # noqa: BLE001
+            return []
 
     def analizar_importacion(self) -> Resultado:
         """Lee las pestañas de la v1 y propone a quién corresponde cada nombre."""
@@ -78,11 +121,18 @@ class ControladorHogar(Controlador):
                 return Resultado.error(
                     "Sólo quien es propietario/a del hogar puede importar los datos."
                 )
-            filas, compras = self._pestanas_v1()
+            filas, compras, origen = self._pestanas_v1()
             if not filas and not compras:
                 return Resultado.aviso(
                     "No encontramos las pestañas «Gastos» ni «Lista_Compras» en la "
-                    "planilla, así que no hay nada para importar."
+                    "planilla.",
+                    {
+                        "filas": 0,
+                        "compras": 0,
+                        "origen": origen,
+                        "pestanas": self._pestanas_visibles(),
+                        "hoja_legacy": (getattr(self.config, "hoja_url_legacy", "") or "").strip(),
+                    },
                 )
             informe = migracion.analizar(filas)
             miembros = self.repo.miembros(self.hogar_id)
@@ -93,11 +143,13 @@ class ControladorHogar(Controlador):
                 {
                     "filas": len(filas),
                     "compras": len(compras),
+                    "origen": origen,
                     "informe": informe,
                     "miembros": miembros,
                     "mapeo": mapeo,
                     "ya_importado": (ya or {}).get("creado_en", ""),
                     "sin_asignar": [n for n in informe.personas if n not in mapeo],
+                    "pestanas": self._pestanas_visibles(),
                 },
             )
         except Exception as exc:  # noqa: BLE001
@@ -112,7 +164,7 @@ class ControladorHogar(Controlador):
                 return Resultado.error(
                     "Sólo quien es propietario/a del hogar puede importar los datos."
                 )
-            filas, compras = self._pestanas_v1()
+            filas, compras, _origen = self._pestanas_v1()
             if not filas and not compras:
                 return Resultado.error("No hay datos de la planilla vieja para importar.")
             informe = migracion.importar(

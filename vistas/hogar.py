@@ -268,10 +268,19 @@ def _importar_v1(ctx: Contexto) -> None:
             return
         info = analisis.datos or {}
         if not info.get("filas") and not info.get("compras"):
-            st.info("No encontramos pestañas viejas con datos en esta planilla.")
+            _sin_pestanas(ctx, info)
             return
 
         informe = info["informe"]
+        if info.get("origen") == "externa":
+            st.caption(
+                "Leyendo la planilla anterior configurada en `hoja_url_legacy`."
+            )
+        elif info.get("origen") == "por_columnas":
+            st.caption(
+                "La pestaña tiene otro nombre, pero la reconocí por sus columnas "
+                "(Fecha, Quien, Concepto, Monto)."
+            )
         if info.get("ya_importado"):
             st.warning(
                 "Este hogar ya importó estos datos el "
@@ -326,6 +335,44 @@ def _importar_v1(ctx: Contexto) -> None:
             if resultado.ok:
                 st.session_state["cc_import_informe"] = resultado.datos
             aplicar(resultado)
+
+
+def _sin_pestanas(ctx: Contexto, info: dict) -> None:
+    """Explica por qué no hay nada para importar y qué hacer al respecto."""
+    st.warning("No encontramos las pestañas «Gastos» ni «Lista_Compras».")
+    pestanas = info.get("pestanas") or []
+    if pestanas:
+        st.caption("Pestañas que ve la app en esta planilla:")
+        st.code(", ".join(pestanas), language=None)
+
+    if info.get("origen") == "externa_error":
+        st.error(
+            "Configuraste `hoja_url_legacy`, pero no pude abrir esa planilla. Revisá "
+            "la URL y que la cuenta de servicio tenga acceso (Editor o Lector)."
+        )
+        return
+    if info.get("hoja_legacy"):
+        st.info(
+            "Busqué también en la planilla de `hoja_url_legacy` y tampoco encontré "
+            "esas pestañas."
+        )
+        return
+
+    st.markdown(
+        "Puede que los gastos viejos estén en **otra planilla** (por ejemplo, una "
+        "copia de la original). En ese caso agregá en los Secretos de Streamlit la "
+        "URL de esa planilla —la cuenta de servicio tiene que tener acceso de "
+        "lectura— y reiniciá la app:"
+    )
+    st.code(
+        'hoja_url_legacy = "https://docs.google.com/spreadsheets/d/XXXX/edit"',
+        language="toml",
+    )
+    st.caption(
+        "Si las pestañas se llaman distinto (por ejemplo «Gastos 2025»), renombralas "
+        "a «Gastos» y «Lista_Compras» en esa planilla, o decime el nombre y lo agrego "
+        "como alias."
+    )
 
 
 def _actividad(ctx: Contexto, datos: dict) -> None:

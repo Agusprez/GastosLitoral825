@@ -466,6 +466,16 @@ class TestImportarDesdeLaApp(BaseVistas):
         despues = len(self.repo.gastos(self.hogar["id"], self.usuario["id"]))
         self.assertEqual(antes, despues)
 
+    def test_diagnostico_cuando_no_hay_pestanas(self):
+        """Sin pestañas viejas, la app muestra lo que ve y cómo apuntar a la otra."""
+        self.store.leer_pestana = lambda titulo: []
+        self.store.buscar_pestana_por_columnas = lambda columnas: None
+        self.store.pestanas = lambda: ["cc_gastos", "cc_usuarios", "Gastos 2025"]
+        self.correr(hogar.render, self.ctx)
+        codigos = " ".join(str(args[0]) for (args, _) in streamlit_falso.llamadas("code"))
+        self.assertIn("Gastos 2025", codigos)        # lista de pestañas visibles
+        self.assertIn("hoja_url_legacy", codigos)    # instrucción de configuración
+
 
 class TestEspacioHuggingFace(unittest.TestCase):
     """El repo tiene que seguir sirviendo como Space (cabecera YAML en el README)."""

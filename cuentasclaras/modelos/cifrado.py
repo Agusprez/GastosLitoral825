@@ -289,6 +289,18 @@ class AlmacenCifrado(Store):
         leer = getattr(self._interno, "leer_pestana", None)
         return leer(titulo) if callable(leer) else []
 
+    def leer_pestana_externa(self, titulo: str, url: str) -> list[dict[str, str]]:
+        leer = getattr(self._interno, "leer_pestana_externa", None)
+        return leer(titulo, url) if callable(leer) else []
+
+    def buscar_pestana_por_columnas(self, columnas):
+        buscar = getattr(self._interno, "buscar_pestana_por_columnas", None)
+        return buscar(columnas) if callable(buscar) else None
+
+    def pestanas(self) -> list[str]:
+        listar = getattr(self._interno, "pestanas", None)
+        return listar() if callable(listar) else []
+
     def cerrar(self) -> None:
         cerrar = getattr(self._interno, "cerrar", None)
         if callable(cerrar):
