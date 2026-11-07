@@ -1,8 +1,8 @@
-"""Vista pública: landing y acceso.
+"""Vista pública: acceso (login y registro) con la información en un modal.
 
-Streamlit no es una web de marketing (sin SEO ni rutas amigables), así que la
-landing vive dentro de la app; además `web/landing.html` tiene una versión
-estática para publicar aparte y linkear al servicio.
+La página de entrada es sólo el acceso. Todo lo comercial —qué es, cómo funciona,
+planes y preguntas— vive detrás del botón "Información", en un diálogo, para que
+quien ya es usuario no tenga que scrollear media landing para entrar.
 """
 
 from __future__ import annotations
@@ -12,105 +12,92 @@ import streamlit as st
 from cuentasclaras.modelos import planes
 from cuentasclaras.modelos.dinero import formatear
 
-from .componentes import Contexto, css, entrar, pie, tarjeta
+from .componentes import Contexto, css, entrar, pie
 
 
-def _hero(ctx: Contexto) -> None:
+@st.dialog("Cuentas Claras", width="large")
+def _informacion(ctx: Contexto) -> None:
+    """Todo lo que antes ocupaba la landing, ahora en un modal."""
+    st.markdown(
+        "**Gastos compartidos sin planillas, sin cuentas a mano y sin discusiones.** "
+        "Cargá quién pagó, dividí automático y sabé al instante quién le debe a quién."
+    )
+
+    st.markdown("#### Qué resuelve")
+    st.markdown(
+        "- ⚖️ **División automática:** cada gasto se reparte entre quienes corresponde "
+        "y el saldo se recalcula solo.\n"
+        "- 📎 **Comprobantes:** adjuntás la foto del ticket y queda visible sólo para "
+        "las personas del hogar.\n"
+        "- 🛒 **Lista de compras:** lo que falta en la casa, compartido y tildable "
+        "desde el celular.\n"
+        "- 🏡 **Varios hogares:** tu casa y la de un familiar, separadas, con roles y "
+        "códigos de invitación."
+    )
+
+    st.markdown("#### Cómo funciona")
+    st.markdown(
+        "1. **Creá tu hogar.** Poné un nombre y listo.\n"
+        "2. **Sumá a las personas.** Con un código de 6 caracteres.\n"
+        "3. **Cargá y mirá.** Quién pagó qué, cuánto toca a cada uno y qué transferir."
+    )
+
+    st.markdown("#### Planes")
+    gratis = planes.LIMITES[planes.GRATIS]
+    pro = planes.LIMITES[planes.PRO]
     st.markdown(
         f"""
-        <div class="cc-hero">
-          <h1>💸 {ctx.config.app_nombre}</h1>
-          <p>Gastos compartidos sin planillas, sin cuentas a mano y sin discusiones.
-          Cargá quién pagó, dividí automático y sabé al instante quién le debe a quién.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
+| | Gratis | Pro |
+| --- | --- | --- |
+| Precio | $0 | {formatear(ctx.config.precio_mensual_num, ctx.config.simbolo)}/mes o {formatear(ctx.config.precio_anual_num, ctx.config.simbolo)}/año |
+| Hogares | {gratis['hogares']} | {pro['hogares']} |
+| Personas por hogar | {gratis['miembros']} | {pro['miembros']} |
+| Gastos por mes | {gratis['gastos_mes']} | Ilimitados |
+| Historial | {ctx.config.historial_gratis_meses} meses | Completo |
+| Comprobantes | {gratis['comprobantes_mes']}/mes | Ilimitados |
+"""
     )
-    columnas = st.columns(3, gap="large")
-    with columnas[0]:
-        st.markdown(
-            tarjeta(
-                "División automática",
-                "Cada gasto se reparte entre quienes corresponde y el saldo se recalcula solo.",
-                "⚖️",
-            ),
-            unsafe_allow_html=True,
-        )
-    with columnas[1]:
-        st.markdown(
-            tarjeta(
-                "Comprobantes privados",
-                "Adjuntá la foto del ticket. Sólo las personas del hogar pueden verla.",
-                "📎",
-            ),
-            unsafe_allow_html=True,
-        )
-    with columnas[2]:
-        st.markdown(
-            tarjeta(
-                "Lista de compras",
-                "Lo que falta en la casa, compartido y tildable desde el celular.",
-                "🛒",
-            ),
-            unsafe_allow_html=True,
-        )
-
-
-def _como_funciona() -> None:
-    st.markdown("### Cómo funciona")
-    pasos = st.columns(3, gap="large")
-    with pasos[0]:
-        st.markdown("**1. Creá tu hogar**  \nPoné un nombre y listo. Podés tener más de uno.")
-    with pasos[1]:
-        st.markdown("**2. Sumá a las personas**  \nCon un código de 6 caracteres, sin vueltas.")
-    with pasos[2]:
-        st.markdown(
-            "**3. Cargá y mirá**  \nQuién pagó qué, cuánto toca a cada uno y qué transferir."
-        )
-
-
-def _precios(ctx: Contexto) -> None:
-    st.markdown("### Planes")
-    gratis, pro_mes, pro_anio = st.columns(3, gap="large")
-    with gratis:
-        st.markdown(
-            f"""<div class="cc-card">
-            <h4>Gratis</h4>
-            <div class="cc-precio">$0</div>
-            <p class="cc-nota">para siempre</p>
-            <p style="margin-top:.6rem">1 hogar · hasta {planes.LIMITES[planes.GRATIS]['miembros']} personas ·
-            {planes.LIMITES[planes.GRATIS]['gastos_mes']} gastos por mes ·
-            {ctx.config.historial_gratis_meses} meses de historial</p>
-            </div>""",
-            unsafe_allow_html=True,
-        )
-    with pro_mes:
-        st.markdown(
-            f"""<div class="cc-card">
-            <h4>Pro mensual</h4>
-            <div class="cc-precio">{formatear(ctx.config.precio_mensual_num, ctx.config.simbolo)}</div>
-            <p class="cc-nota">por mes, por hogar</p>
-            <p style="margin-top:.6rem">{planes.LIMITES[planes.PRO]['hogares']} hogares ·
-            hasta {planes.LIMITES[planes.PRO]['miembros']} personas · gastos y comprobantes
-            ilimitados · historial completo</p>
-            </div>""",
-            unsafe_allow_html=True,
-        )
-    with pro_anio:
-        st.markdown(
-            f"""<div class="cc-card">
-            <h4>Pro anual <span class="cc-pill">-{ctx.config.ahorro_anual_pct}%</span></h4>
-            <div class="cc-precio">{formatear(ctx.config.precio_anual_num, ctx.config.simbolo)}</div>
-            <p class="cc-nota">por año <span class="cc-tachado">
-            {formatear(ctx.config.precio_mensual_num * 12, ctx.config.simbolo)}</span></p>
-            <p style="margin-top:.6rem">Todo lo de Pro, pagando 10 meses en vez de 12.</p>
-            </div>""",
-            unsafe_allow_html=True,
-        )
     st.caption(
-        "El cobro se coordina por transferencia o link de pago mientras no esté "
-        "integrada la pasarela. Podés empezar gratis y pasar a Pro cuando quieras."
+        f"El plan anual ahorra {ctx.config.ahorro_anual_pct}%. El cobro se coordina "
+        "por transferencia o link de pago; podés empezar gratis y pasar a Pro cuando quieras."
     )
+
+    st.markdown("#### Preguntas")
+    st.markdown(
+        "**¿Sirve para compañeros de casa?** Sí: en cada gasto elegís entre quiénes se "
+        "divide, así podés repartir el súper entre tres y el internet entre dos.\n\n"
+        "**¿Y si pagué algo que era sólo para otra persona?** Esa persona queda "
+        "debiendo el 100% de ese gasto.\n\n"
+        "**¿Necesito instalar algo?** No, se usa desde el navegador del celular o la "
+        "computadora.\n\n"
+        "**¿Puedo llevarme mis datos?** Sí, desde «Mi cuenta» exportás CSV y JSON."
+    )
+
+    st.divider()
+    st.caption(
+        "🔒 **Privado por diseño:** cada hogar ve sólo sus datos, las contraseñas se "
+        "guardan con `scrypt` y la información se guarda cifrada en el almacenamiento. "
+        f"¿Dudas? {ctx.config.soporte_email}"
+    )
+
+
+def _acceso(ctx: Contexto) -> None:
+    """Formularios de entrada y registro, en una tarjeta centrada."""
+    col_izq, centro, col_der = st.columns([1, 1.2, 1], gap="large")
+    with centro:
+        st.markdown("## 💸 Cuentas Claras")
+        st.caption("Gastos compartidos del hogar. Entrá o creá tu cuenta en un minuto.")
+        st.write("")
+
+        tab_login, tab_registro = st.tabs(["Ya tengo cuenta", "Crear cuenta gratis"])
+        with tab_login:
+            _entrar(ctx)
+        with tab_registro:
+            _registro(ctx)
+
+        st.write("")
+        if st.button("ℹ️ Información y planes", use_container_width=True):
+            _informacion(ctx)
 
 
 def _entrar(ctx: Contexto) -> None:
@@ -125,10 +112,7 @@ def _entrar(ctx: Contexto) -> None:
             entrar(ctx, resultado.datos)
         else:
             st.error(resultado.mensaje)
-    st.caption(
-        f"¿No te acordás la contraseña? Escribinos a {ctx.config.soporte_email} "
-        "y te ayudamos a recuperar la cuenta."
-    )
+    st.caption(f"¿No te acordás la contraseña? Escribinos a {ctx.config.soporte_email}.")
 
 
 def _registro(ctx: Contexto) -> None:
@@ -144,7 +128,7 @@ def _registro(ctx: Contexto) -> None:
         email = st.text_input("Email", placeholder="vos@email.com")
         col_a, col_b = st.columns(2)
         clave = col_a.text_input("Contraseña", type="password", help="Mínimo 8 caracteres")
-        clave2 = col_b.text_input("Repetí la contraseña", type="password")
+        clave2 = col_b.text_input("Repetir contraseña", type="password")
         codigo = st.text_input(
             "Código de invitación (opcional)",
             placeholder="ABC123",
@@ -166,62 +150,6 @@ def _registro(ctx: Contexto) -> None:
 
 def render(ctx: Contexto) -> None:
     css()
-    _hero(ctx)
-
-    col_info, col_acceso = st.columns([1.15, 1], gap="large")
-    with col_acceso:
-        st.markdown("### Entrá o creá tu cuenta")
-        tab_login, tab_registro = st.tabs(["Ya tengo cuenta", "Crear cuenta gratis"])
-        with tab_login:
-            _entrar(ctx)
-        with tab_registro:
-            _registro(ctx)
-
-    with col_info:
-        _como_funciona()
-        st.markdown("")
-        st.markdown(
-            tarjeta(
-                "Privado por diseño",
-                "Cada hogar ve sólo sus datos. Las contraseñas se guardan cifradas "
-                "con scrypt y la información se guarda cifrada en el almacenamiento.",
-                "🔒",
-            ),
-            unsafe_allow_html=True,
-        )
-        st.markdown("")
-        if ctx.config.almacen == "sheets":
-            st.caption(
-                "Datos alojados en Google Sheets, cifrados con ChaCha20 "
-                "(sin la clave no se pueden leer)."
-            )
-        else:
-            st.caption("Datos alojados en la base de datos del servidor, cifrados en reposo.")
-
-    _precios(ctx)
-
-    st.markdown("### Preguntas frecuentes")
-    with st.expander("¿Sirve para una pareja, una familia o compañeros de casa?"):
-        st.write(
-            "Sí. Los gastos se dividen entre las personas que elijas en cada movimiento, "
-            "así que podés repartir 50/50 con tu pareja o dividir sólo la compra del súper "
-            "entre tres compañeros de departamento."
-        )
-    with st.expander("¿Qué pasa si alguien pagó algo que no era para todos?"):
-        st.write(
-            "Al cargar el gasto elegís entre quiénes se divide. Si pagaste un regalo sólo "
-            "para otra persona, esa persona queda debiendo el 100%."
-        )
-    with st.expander("¿Puedo exportar mis datos?"):
-        st.write(
-            "Sí, desde «Mi cuenta» podés descargar un CSV de los movimientos y un JSON "
-            "con el hogar completo."
-        )
-    with st.expander("¿Dónde quedan mis datos si el servicio cierra?"):
-        st.write(
-            "Son tuyos: podés exportarlos cuando quieras. Si los datos están en una "
-            "planilla de Google, además quedan en tu propio Drive."
-        )
-
-    st.markdown("---")
+    _acceso(ctx)
+    st.write("")
     pie()

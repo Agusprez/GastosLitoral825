@@ -93,11 +93,36 @@ class BaseVistas(unittest.TestCase):
 
 
 class TestLanding(BaseVistas):
-    def test_landing_sin_sesion(self):
+    def test_landing_solo_tiene_acceso(self):
+        """La página de entrada no muestra la info comercial: eso vive en el modal."""
         ctx = self._contexto(None, None)
         self.correr(landing.render, ctx)
         textos = " ".join(str(a[0]) for (a, _) in streamlit_falso.llamadas("markdown"))
         self.assertIn("Cuentas Claras", textos)
+        for seccion in ("Qué resuelve", "Cómo funciona", "Preguntas", "| Precio |"):
+            self.assertNotIn(seccion, textos)
+        # Los formularios están en la página.
+        self.assertTrue(streamlit_falso.llamadas("form"))
+        self.assertEqual(self.fallos(), [])
+
+    def test_boton_de_informacion(self):
+        ctx = self._contexto(None, None)
+        self.correr(landing.render, ctx)
+        etiquetas = [str(args[0]) for (args, _) in streamlit_falso.llamadas("button")]
+        self.assertTrue(any("Información" in etiqueta for etiqueta in etiquetas), etiquetas)
+
+
+class TestLandingInfoModal(BaseVistas):
+    """Con el botón apretado, el modal de información se arma completo."""
+
+    modo_click = True
+
+    def test_modal_con_planes_y_preguntas(self):
+        ctx = self._contexto(None, None)
+        self.correr(landing.render, ctx)
+        textos = " ".join(str(a[0]) for (a, _) in streamlit_falso.llamadas("markdown"))
+        for seccion in ("Qué resuelve", "Cómo funciona", "Preguntas", "Gratis"):
+            self.assertIn(seccion, textos)
         self.assertEqual(self.fallos(), [])
 
 
