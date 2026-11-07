@@ -119,6 +119,10 @@ class Store(ABC):
     def ping(self) -> str:
         return "ok"
 
+    def leer_pestana(self, titulo: str) -> list[dict[str, str]]:
+        """Filas de una pestaña ajena al esquema (migraciones). Sin pestañas acá."""
+        return []
+
 
 class MemoryStore(Store):
     """Store en memoria: rápido, descartable. Base de los tests."""
@@ -412,6 +416,42 @@ class SheetsStore(Store):
                 self._cache.clear()
             else:
                 self._cache.pop(tabla, None)
+
+    # --- lectura de pestañas ajenas al esquema (migraciones) ---------------- #
+    def leer_pestana(self, titulo: str) -> list[dict[str, str]]:
+        """Devuelve las filas de una pestaña cualquiera, sin tocar su contenido.
+
+        Se usa para importar datos de la versión 1 (`Gastos`, `Lista_Compras`).
+        Devuelve `[]` si la pestaña no existe.
+        """
+        hoja = self._buscar(titulo)
+        if hoja is None:
+            return []
+        try:
+            valores = hoja.get_all_values()
+        except Exception as exc:  # noqa: BLE001
+            raise ErrorAlmacen(
+                f"No se pudo leer la pestaña «{titulo}»: {exc}"
+            ) from exc
+        if len(valores) < 2:
+            return []
+        encabezados = [str(c).strip() for c in valores[0]]
+        filas: list[dict[str, str]] = []
+        for cruda in valores[1:]:
+            if not any(str(c).strip() for c in cruda):
+                continue
+            fila = {
+                encabezados[i]: (cruda[i] if i < len(cruda) else "")
+                for i in range(len(encabezados))
+                if encabezados[i]
+            }
+            if any(str(v).strip() for v in fila.values()):
+                filas.append(fila)
+        return filas
+
+    def pestanas(self) -> list[str]:
+        """Nombres de todas las pestañas de la planilla."""
+        return [str(getattr(hoja, "title", "")) for hoja in self._listar_hojas()]
 
     def _valores(self, tabla: str) -> list[dict[str, str]]:
         hoja = self._hoja(tabla)

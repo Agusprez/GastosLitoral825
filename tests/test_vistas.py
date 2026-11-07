@@ -430,6 +430,43 @@ class TestCookieDeSesion(BaseVistas):
         self.assertNotIn(componentes.COOKIE, streamlit_falso.SESION_COOKIES)
 
 
+class TestImportarDesdeLaApp(BaseVistas):
+    """El panel de importación lee las pestañas viejas sin tocar nada."""
+
+    GASTOS_V1 = [
+        {"Fecha": "05/10/2026", "Quien": "Ana", "Concepto": "Compra Coto", "Monto": "48500", "Categoria": "Supermercado"},
+        {"Fecha": "12/10/2026", "Quien": "Bruno", "Concepto": "Nafta", "Monto": "32000", "Categoria": "Auto"},
+    ]
+
+    def setUp(self) -> None:
+        super().setUp()
+        pestañas = {
+            "Gastos": self.GASTOS_V1,
+            "Lista_Compras": [{"Elemento": "Yerba", "Quién Anotó": "Ana"}],
+        }
+        # El store de test gana la capacidad de leer pestañas ajenas.
+        self.store.leer_pestana = lambda titulo: list(pestañas.get(titulo, []))
+
+    def test_muestra_la_previsualizacion(self):
+        self.correr(hogar.render, self.ctx)
+        textos = " ".join(str(args[0]) for (args, _) in streamlit_falso.llamadas("markdown"))
+        self.assertIn("2 fila(s) en «Gastos»", textos)
+        self.assertEqual(self.fallos(), [])
+        self.assertEqual(self.dolares_peligrosos(), [])
+
+    def test_ofrece_mapear_cada_persona(self):
+        self.correr(hogar.render, self.ctx)
+        etiquetas = [str(args[0]) for (args, _) in streamlit_falso.llamadas("selectbox")]
+        self.assertTrue(any("Ana" in e for e in etiquetas), etiquetas)
+        self.assertTrue(any("Bruno" in e for e in etiquetas), etiquetas)
+
+    def test_no_importa_solo_por_entrar(self):
+        antes = len(self.repo.gastos(self.hogar["id"], self.usuario["id"]))
+        self.correr(hogar.render, self.ctx)
+        despues = len(self.repo.gastos(self.hogar["id"], self.usuario["id"]))
+        self.assertEqual(antes, despues)
+
+
 class TestEspacioHuggingFace(unittest.TestCase):
     """El repo tiene que seguir sirviendo como Space (cabecera YAML en el README)."""
 

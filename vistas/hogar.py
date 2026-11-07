@@ -8,6 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from cuentasclaras.modelos import planes
+from cuentasclaras.modelos.dinero import formatear_fecha
 
 from .componentes import Contexto, aplicar, ejecutar, mostrar, pill
 
@@ -214,6 +215,9 @@ def _ajustes(ctx: Contexto, datos: dict) -> None:
         )
 
     st.divider()
+    if datos["es_propietario"]:
+        _importar_v1(ctx)
+    st.divider()
     st.markdown("#### Zona peligrosa")
     if datos["es_propietario"]:
         with st.expander("Eliminar este hogar"):
@@ -235,6 +239,93 @@ def _ajustes(ctx: Contexto, datos: dict) -> None:
                     mostrar(resultado)
     else:
         st.caption("Sólo el propietario o la propietaria puede eliminar el hogar.")
+
+
+def _importar_v1(ctx: Contexto) -> None:
+    """Trae las pestañas de la v1 (`Gastos`, `Lista_Compras`) al hogar activo."""
+    with st.expander("📥 Importar los gastos de la planilla anterior"):
+        st.caption(
+            "Trae al hogar las pestañas viejas «Gastos» y «Lista_Compras» de la misma "
+            "planilla. No borra ni modifica esas pestañas: sólo lee."
+        )
+
+        ultimo = st.session_state.pop("cc_import_informe", None)
+        if ultimo is not None:
+            st.success(
+                f"Importamos {ultimo.importados} gasto(s)"
+                + (f" y {ultimo.compras} compra(s)." if ultimo.compras else ".")
+            )
+            if ultimo.omitidos:
+                st.warning(f"Quedaron {ultimo.omitidos} fila(s) sin importar.")
+            for aviso in ultimo.errores[:5]:
+                st.caption(f"· {aviso}")
+            if len(ultimo.errores) > 5:
+                st.caption(f"· y {len(ultimo.errores) - 5} aviso(s) más")
+
+        analisis = ctx.hogar_ctl().analizar_importacion()
+        if not analisis.ok:
+            mostrar(analisis)
+            return
+        info = analisis.datos or {}
+        if not info.get("filas") and not info.get("compras"):
+            st.info("No encontramos pestañas viejas con datos en esta planilla.")
+            return
+
+        informe = info["informe"]
+        if info.get("ya_importado"):
+            st.warning(
+                "Este hogar ya importó estos datos el "
+                f"{str(info['ya_importado'])[:16].replace('T', ' ')}. "
+                "Si volvés a importar se van a duplicar."
+            )
+        st.markdown(
+            f"**{info['filas']} fila(s) en «Gastos»** · {ctx.dinero_md(informe.total)} · "
+            f"del {formatear_fecha(informe.desde)} al {formatear_fecha(informe.hasta)}"
+            + (f" · {info['compras']} compra(s) pendientes" if info.get("compras") else "")
+        )
+
+        miembros = info.get("miembros") or []
+        nombres = {m["usuario_id"]: m["nombre"] for m in miembros}
+        ids = list(nombres)
+        if not ids:
+            st.info("Primero sumá personas al hogar.")
+            return
+
+        st.markdown("**¿Quién es quién?**")
+        mapeo: dict[str, str] = {}
+        for nombre_detectado, cantidad in informe.personas.items():
+            propuesto = info.get("mapeo", {}).get(nombre_detectado, "")
+            indice = ids.index(propuesto) + 1 if propuesto in ids else 0
+            elegido = st.selectbox(
+                f"«{nombre_detectado}» ({cantidad} gastos)",
+                [""] + ids,
+                index=indice,
+                format_func=lambda i: nombres.get(i, "— no importar estos gastos —"),
+                key=f"cc_map_{nombre_detectado}",
+            )
+            if elegido:
+                mapeo[nombre_detectado] = elegido
+
+        sin_asignar = [n for n in informe.personas if n not in mapeo]
+        por_defecto = ""
+        if sin_asignar:
+            por_defecto = st.selectbox(
+                f"«{', '.join(sin_asignar)}» no está(n) asignado(s): ¿a quién le cargamos "
+                "esos gastos?",
+                [""] + ids,
+                format_func=lambda i: nombres.get(i, "— omitir esas filas —"),
+                key="cc_import_defecto",
+            )
+
+        confirmo = st.checkbox(
+            "Confirmo que quiero importar estos gastos a este hogar",
+            key="cc_import_confirmo",
+        )
+        if st.button("Importar ahora", type="primary", disabled=not confirmo):
+            resultado = ctx.hogar_ctl().importar_v1(mapeo, por_defecto)
+            if resultado.ok:
+                st.session_state["cc_import_informe"] = resultado.datos
+            aplicar(resultado)
 
 
 def _actividad(ctx: Contexto, datos: dict) -> None:

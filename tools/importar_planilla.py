@@ -40,6 +40,7 @@ from typing import Any
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ))
 
+from cuentasclaras.modelos import migracion as _migracion  # noqa: E402
 from cuentasclaras.modelos import planes  # noqa: E402
 from cuentasclaras.modelos.almacen import ErrorAlmacen  # noqa: E402
 from cuentasclaras.modelos.configuracion import armar  # noqa: E402
@@ -47,14 +48,7 @@ from cuentasclaras.modelos.dinero import parsear_fecha  # noqa: E402
 from cuentasclaras.modelos.fabrica import abrir_almacen  # noqa: E402
 from cuentasclaras.modelos.repositorio import CATEGORIAS, ErrorNegocio, Repositorio  # noqa: E402
 
-ALIAS = {
-    "fecha": ("fecha", "date", "dia", "día"),
-    "quien": ("quien", "quién", "pagado_por", "quien pago", "quién pagó", "who", "usuario"),
-    "concepto": ("concepto", "detalle", "descripcion", "descripción", "concept"),
-    "monto": ("monto", "importe", "valor", "total", "amount"),
-    "categoria": ("categoria", "categoría", "category", "rubro"),
-    "comprobante": ("comprobante", "ticket", "foto", "imagen", "receipt"),
-}
+ALIAS = _migracion.ALIAS
 
 CLAVE_PROVISORIA = "CambiarEstaClave2026"
 
@@ -89,14 +83,8 @@ class Informe:
 # Lectura de datos
 # --------------------------------------------------------------------------- #
 def normalizar_fila(fila: dict[str, Any]) -> dict[str, str]:
-    claves = {str(k).strip().lower(): (v if v is not None else "") for k, v in fila.items()}
-    salida: dict[str, str] = {}
-    for campo, alias in ALIAS.items():
-        for nombre in alias:
-            if nombre in claves and str(claves[nombre]).strip() != "":
-                salida[campo] = str(claves[nombre]).strip()
-                break
-    return salida
+    """Delegado en el modelo: misma normalización que usa la app."""
+    return _migracion.normalizar_fila(fila)
 
 
 def leer_csv(ruta: Path) -> list[dict[str, str]]:
@@ -219,70 +207,15 @@ def importar(
     aplicar: bool = True,
     compras: list[dict[str, str]] | None = None,
 ) -> Informe:
+    """Delegado en `migracion.importar` (la misma lógica que usa la app)."""
+    resultado = _migracion.importar(
+        repo, hogar_id, filas, ids, aplicar=aplicar, compras=compras or ()
+    )
     informe = Informe()
-    participantes = [uid for uid in ids.values() if uid]
-
-    def _resolver(nombre: str) -> str:
-        buscado = (nombre or "").strip().lower()
-        for clave, usuario_id in ids.items():
-            if clave.lower() == buscado:
-                return usuario_id
-        return ""
-
-    for numero, fila in enumerate(filas, start=2):
-        concepto = (fila.get("concepto") or "").strip()
-        monto = fila.get("monto") or ""
-        try:
-            fecha = parsear_fecha(fila.get("fecha", ""))
-        except ValueError:
-            informe.omitidos += 1
-            informe.errores.append(f"fila {numero}: fecha inválida {fila.get('fecha')!r}")
-            continue
-        if not concepto:
-            informe.omitidos += 1
-            informe.errores.append(f"fila {numero}: sin detalle")
-            continue
-        quien = _resolver(fila.get("quien", ""))
-        if not quien:
-            informe.omitidos += 1
-            informe.errores.append(
-                f"fila {numero}: «{fila.get('quien')}» no está en --usuarios"
-            )
-            continue
-        categoria = fila.get("categoria") or "Otros"
-        if categoria not in CATEGORIAS:
-            categoria = "Otros"
-        if not aplicar:
-            informe.importados += 1
-            continue
-        try:
-            repo.agregar_gasto(
-                hogar_id,
-                quien,
-                concepto,
-                monto,
-                categoria,
-                quien,
-                participantes,
-                fecha=fecha,
-                comprobante=fila.get("comprobante", ""),
-            )
-            informe.importados += 1
-        except ErrorNegocio as exc:
-            informe.omitidos += 1
-            informe.errores.append(f"fila {numero}: {exc}")
-
-    for indice, compra in enumerate(compras or [], start=2):
-        texto = (compra.get("concepto") or compra.get("texto") or "").strip()
-        if not texto:
-            informe.omitidos += 1
-            continue
-        if aplicar and ids:
-            try:
-                repo.agregar_compra(hogar_id, next(iter(ids.values())), texto)
-                informe.compras += 1
-            except ErrorNegocio as exc:
-                informe.errores.append(f"compra {indice}: {exc}")
+    informe.importados = resultado.importados
+    informe.omitidos = resultado.omitidos
+    informe.compras = resultado.compras
+    informe.errores = list(resultado.errores)
     return informe
 
 

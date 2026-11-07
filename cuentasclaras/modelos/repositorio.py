@@ -1045,7 +1045,8 @@ class Repositorio:
         pro = sum(1 for h in hogares if plans.normalizar_plan(h.get("plan")) == plans.PRO)
         mrr = self.config.precio_mensual_num * pro
         return {
-            "usuarios": len(usuarios),            "usuarios_activos_30": activos_30,
+            "usuarios": len(usuarios),
+            "usuarios_activos_30": activos_30,
             "hogares": len(hogares),
             "hogares_pro": pro,
             "hogares_gratis": len(hogares) - pro,
@@ -1119,3 +1120,19 @@ class Repositorio:
         filas = self.store.filtrar("eventos", hogar_id=hogar_id)
         filas.sort(key=lambda e: e.get("creado_en", ""), reverse=True)
         return [dict(f) for f in filas[:limite]]
+
+    def registrar_evento(
+        self, hogar_id: str, usuario_id: str, accion: str, detalle: str = ""
+    ) -> None:
+        """Anota una acción en la actividad del hogar (para marcas de migración)."""
+        if self.rol_en(hogar_id, usuario_id) is None:
+            raise NoAutorizado("No tenés acceso a este hogar.")
+        self._auditar(hogar_id, usuario_id, accion, detalle)
+
+    def buscar_evento(self, hogar_id: str, accion: str) -> dict[str, Any] | None:
+        """Último evento con esa acción en el hogar (o None)."""
+        filas = [f for f in self.store.filtrar("eventos", hogar_id=hogar_id) if f.get("accion") == accion]
+        if not filas:
+            return None
+        filas.sort(key=lambda e: e.get("creado_en", ""), reverse=True)
+        return dict(filas[0])

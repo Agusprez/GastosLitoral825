@@ -284,6 +284,11 @@ class AlmacenCifrado(Store):
     def ping(self) -> str:
         return f"{self._interno.ping()} · cifrado ChaCha20"
 
+    def leer_pestana(self, titulo: str) -> list[dict[str, str]]:
+        """Pestañas ajenas al esquema (v1): se leen tal cual, en texto plano."""
+        leer = getattr(self._interno, "leer_pestana", None)
+        return leer(titulo) if callable(leer) else []
+
     def cerrar(self) -> None:
         cerrar = getattr(self._interno, "cerrar", None)
         if callable(cerrar):

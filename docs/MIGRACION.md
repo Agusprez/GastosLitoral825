@@ -9,13 +9,36 @@ La v2 escribe en **pestañas nuevas** (`cc_usuarios`, `cc_gastos`, …) dentro d
 **misma** planilla. Las pestañas viejas no se tocan: se pueden quedar como respaldo
 o borrarse cuando confirmes que todo migró.
 
-## Antes de empezar
+## Opción A (recomendada): desde la app, sin tocar nada
 
-1. **Copia la planilla** (Archivo → Hacer una copia) o descargá un CSV de `Gastos`.
-2. Configurá los secretos de la v2 (ver `docs/DEPLOY.md`) y una `clave_cifrado`.
-3. Decidí quiénes son las personas y con qué email van a entrar.
+Todo ocurre donde ya están las credenciales, así que no hace falta configurar nada
+en tu computadora:
 
-## Importar desde la planilla
+1. Entrá a la app con tu cuenta y elegí el hogar destino (tiene que ser del plan Pro:
+   Gratis permite 200 gastos por mes).
+2. *Hogar → Ajustes → **📥 Importar los gastos de la planilla anterior***.
+3. Vas a ver un resumen: cuántas filas hay, el total, el rango de fechas y cuántas
+   compras pendientes.
+4. Asigná cada nombre de la planilla a la persona del hogar. Si aparece un nombre que
+   no está en el hogar (por ejemplo, alguien que ya no usa la app), elegí a quién
+   cargarle esos gastos o dejalo en "no importar".
+5. Marcá la confirmación y **Importar ahora**.
+
+Detalles:
+
+* Los gastos entran **repartidos en partes iguales** entre las personas del hogar,
+  que es la regla que usaba la v1 ("mitad y mitad" al cerrar el mes).
+* Los links de comprobantes de la v1 se conservan tal cual (se ven, no se descargan).
+* Las compras pendientes se anotan en la lista del hogar.
+* Las filas con fecha inválida o sin detalle se omiten y el resumen dice cuántas.
+* Queda registrado en *Actividad* cuándo se importó. Si volvés a importar, la app te
+  avisa que se van a duplicar.
+* Se puede revertir: los gastos importados se pueden anular uno por uno, o eliminar
+  el hogar y volver a empezar.
+
+## Opción B: por línea de comandos
+
+Útil si preferís no entrar a la app, o si querés importar un CSV exportado a mano.
 
 ```bash
 # 1) Informe: no escribe nada

@@ -5,9 +5,11 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import quote
 
-from ..modelos import planes
+from ..modelos import migracion, planes
 from ..modelos.repositorio import ROLES_ETIQUETA
 from .base import Controlador, Resultado
+
+ACCION_IMPORTACION = "importacion_v1"
 
 
 class ControladorHogar(Controlador):
@@ -58,6 +60,86 @@ class ControladorHogar(Controlador):
             return self.repo.miembros(self.hogar_id)
         except Exception:  # noqa: BLE001
             return []
+
+    # --- importación de la planilla vieja (v1) ---------------------------- #
+    def _pestanas_v1(self) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+        leer = getattr(self.repo.store, "leer_pestana", None)
+        if not callable(leer):
+            return [], []
+        return (
+            leer(migracion.PESTANA_GASTOS),
+            leer(migracion.PESTANA_COMPRAS),
+        )
+
+    def analizar_importacion(self) -> Resultado:
+        """Lee las pestañas de la v1 y propone a quién corresponde cada nombre."""
+        try:
+            if self.rol != "propietario":
+                return Resultado.error(
+                    "Sólo quien es propietario/a del hogar puede importar los datos."
+                )
+            filas, compras = self._pestanas_v1()
+            if not filas and not compras:
+                return Resultado.aviso(
+                    "No encontramos las pestañas «Gastos» ni «Lista_Compras» en la "
+                    "planilla, así que no hay nada para importar."
+                )
+            informe = migracion.analizar(filas)
+            miembros = self.repo.miembros(self.hogar_id)
+            mapeo = migracion.proponer_mapeo(informe.personas, miembros)
+            ya = self.repo.buscar_evento(self.hogar_id, ACCION_IMPORTACION)
+            return Resultado.exito(
+                "",
+                {
+                    "filas": len(filas),
+                    "compras": len(compras),
+                    "informe": informe,
+                    "miembros": miembros,
+                    "mapeo": mapeo,
+                    "ya_importado": (ya or {}).get("creado_en", ""),
+                    "sin_asignar": [n for n in informe.personas if n not in mapeo],
+                },
+            )
+        except Exception as exc:  # noqa: BLE001
+            return Resultado.error(str(exc))
+
+    def importar_v1(
+        self, mapeo: dict[str, str], por_defecto: str = ""
+    ) -> Resultado:
+        """Importa los gastos y compras de la planilla vieja al hogar activo."""
+        try:
+            if self.rol != "propietario":
+                return Resultado.error(
+                    "Sólo quien es propietario/a del hogar puede importar los datos."
+                )
+            filas, compras = self._pestanas_v1()
+            if not filas and not compras:
+                return Resultado.error("No hay datos de la planilla vieja para importar.")
+            informe = migracion.importar(
+                self.repo,
+                self.hogar_id,
+                filas,
+                mapeo,
+                aplicar=True,
+                compras=compras,
+                por_defecto=por_defecto,
+            )
+            self.repo.registrar_evento(
+                self.hogar_id,
+                self.usuario_id,
+                ACCION_IMPORTACION,
+                f"{informe.importados} gastos, {informe.compras} compras",
+            )
+            mensaje = (
+                f"Importamos {informe.importados} gasto(s)"
+                + (f" y {informe.compras} compra(s)" if informe.compras else "")
+                + "."
+            )
+            if informe.omitidos:
+                mensaje += f" Quedaron {informe.omitidos} fila(s) sin importar."
+            return Resultado.exito(mensaje, informe)
+        except Exception as exc:  # noqa: BLE001
+            return Resultado.error(str(exc))
 
     # --- invitaciones ----------------------------------------------------- #
     def invitar(self, rol: str = "miembro", dias: int = 14, usos_max: int = 10) -> Resultado:
