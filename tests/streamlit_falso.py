@@ -84,6 +84,7 @@ ESTADO = _Estado()
 SECRETOS = _Secretos()
 SESION_COOKIES: dict[str, str] = {}
 MODO_CLICK = False  # si es True, botones y submits devuelven True
+ARCHIVO_SUBIDO: Any = None  # lo que debe devolver `file_uploader`
 PEDIDOS: list[tuple[str, tuple, dict]] = []  # registro de llamadas
 
 
@@ -93,8 +94,9 @@ def _registrar(nombre: str, args: tuple, kwargs: dict) -> None:
 
 def falso_config(**kwargs: Any) -> None:
     """Reinicia el doble y ajusta opciones del test."""
-    global MODO_CLICK
+    global MODO_CLICK, ARCHIVO_SUBIDO
     MODO_CLICK = bool(kwargs.get("modo_click", False))
+    ARCHIVO_SUBIDO = kwargs.get("archivo")
     ESTADO.clear()
     SECRETOS.clear()
     SESION_COOKIES.clear()
@@ -359,7 +361,7 @@ def date_input(
 
 def file_uploader(label: str = "", type: Any = None, accept_multiple_files: bool = False, key: str | None = None) -> Any:
     _registrar("file_uploader", (label,), {"key": key})
-    return None
+    return ARCHIVO_SUBIDO
 
 
 def slider(label: str = "", min_value: Any = 0, max_value: Any = 100, value: Any = None, key: str | None = None) -> Any:

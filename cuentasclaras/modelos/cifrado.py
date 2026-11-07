@@ -306,6 +306,10 @@ class AlmacenCifrado(Store):
         if callable(limpiar):
             limpiar()
 
+    def insert_many(self, tabla: str, filas) -> int:
+        cifradas = [self._cifrar_fila(tabla, fila) for fila in filas]
+        return self._interno.insert_many(tabla, cifradas)
+
     def cerrar(self) -> None:
         cerrar = getattr(self._interno, "cerrar", None)
         if callable(cerrar):

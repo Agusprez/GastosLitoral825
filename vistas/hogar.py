@@ -7,7 +7,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
-from cuentasclaras.modelos import planes
+from cuentasclaras.modelos import migracion, planes
 from cuentasclaras.modelos.dinero import formatear_fecha
 
 from .componentes import Contexto, aplicar, ejecutar, mostrar, pill
@@ -242,18 +242,17 @@ def _ajustes(ctx: Contexto, datos: dict) -> None:
 
 
 def _importar_v1(ctx: Contexto) -> None:
-    """Trae las pestañas de la v1 al hogar activo.
+    """Importa los gastos anteriores: desde un archivo o desde la planilla vieja.
 
-    Ojo: `st.tabs` ejecuta todas las pestañas en cada rerun, así que acá NO se
-    consulta la planilla automáticamente (eso agotaba la cuota de lecturas de
-    Google). El análisis se hace sólo cuando se aprieta el botón y queda guardado
-    en la sesión.
+    Primero ofrece subir un CSV/Excel (no consume lecturas de Google: los datos
+    viajan en el archivo y se escribe una sola vez). El botón de leer la planilla
+    queda para cuando las pestañas viejas están en el mismo archivo.
     """
-    with st.expander("📥 Importar los gastos de la planilla anterior"):
+    with st.expander("📥 Importar los gastos anteriores"):
         st.caption(
-            "Trae al hogar las pestañas viejas de la misma planilla («Gastos», "
-            "«Lista_Compras» o las que tengan esas columnas). No borra ni modifica "
-            "nada: sólo lee."
+            "Subí el CSV o Excel de la planilla vieja. También podés leer las "
+            "pestañas viejas de la planilla de la app. En ningún caso se borra ni se "
+            "modifica el origen."
         )
 
         ultimo = st.session_state.pop("cc_import_informe", None)
@@ -269,13 +268,38 @@ def _importar_v1(ctx: Contexto) -> None:
             if len(ultimo.errores) > 5:
                 st.caption(f"· y {len(ultimo.errores) - 5} aviso(s) más")
 
+        subido = st.file_uploader(
+            "Archivo (CSV o Excel)",
+            type=["csv", "xlsx", "xls", "xlsm"],
+            key="cc_import_archivo",
+        )
+        if subido is not None:
+            try:
+                filas, compras = migracion.leer_archivo(subido.name, subido.getvalue())
+            except Exception as exc:  # noqa: BLE001
+                st.error(f"No pude leer el archivo: {exc}")
+                return
+            analisis = ctx.hogar_ctl().analizar_filas(filas, compras)
+            if not analisis.ok:
+                mostrar(analisis)
+                return
+            _preview_y_mapeo(
+                ctx,
+                analisis.datos or {},
+                lambda mapeo, por_defecto: ctx.hogar_ctl().importar_filas(
+                    filas, mapeo, por_defecto, compras=compras
+                ),
+                clave="archivo",
+            )
+            return
+
         guardado = st.session_state.get("cc_import_analisis")
         if guardado is None:
             st.caption(
-                "Se lee la planilla una sola vez, al apretar el botón, para no "
-                "consumir el límite de lecturas de Google."
+                "Leer la planilla consume el límite de lecturas de Google, así que se "
+                "hace sólo cuando lo pedís."
             )
-            if st.button("🔍 Buscar los datos de la planilla anterior", type="primary"):
+            if st.button("🔍 Buscar los datos en la planilla"):
                 with st.spinner("Leyendo las pestañas…"):
                     analisis = ctx.hogar_ctl().analizar_importacion()
                 st.session_state["cc_import_analisis"] = analisis
@@ -297,71 +321,87 @@ def _importar_v1(ctx: Contexto) -> None:
                 st.rerun()
             return
 
-        informe = info["informe"]
-        if info.get("origen") == "externa":
-            st.caption(
-                "Leyendo la planilla anterior configurada en `hoja_url_legacy`."
-            )
-        elif info.get("origen") == "por_columnas":
-            st.caption(
-                "La pestaña tiene otro nombre, pero la reconocí por sus columnas "
-                "(Fecha, Quien, Concepto, Monto)."
-            )
-        if info.get("ya_importado"):
-            st.warning(
-                "Este hogar ya importó estos datos el "
-                f"{str(info['ya_importado'])[:16].replace('T', ' ')}. "
-                "Si volvés a importar se van a duplicar."
-            )
-        st.markdown(
-            f"**{info['filas']} fila(s) en «Gastos»** · {ctx.dinero_md(informe.total)} · "
-            f"del {formatear_fecha(informe.desde)} al {formatear_fecha(informe.hasta)}"
-            + (f" · {info['compras']} compra(s) pendientes" if info.get("compras") else "")
+        _preview_y_mapeo(
+            ctx,
+            info,
+            lambda mapeo, por_defecto: ctx.hogar_ctl().importar_v1(mapeo, por_defecto),
+            clave="planilla",
+            al_importar=lambda: st.session_state.pop("cc_import_analisis", None),
         )
 
-        miembros = info.get("miembros") or []
-        nombres = {m["usuario_id"]: m["nombre"] for m in miembros}
-        ids = list(nombres)
-        if not ids:
-            st.info("Primero sumá personas al hogar.")
-            return
 
-        st.markdown("**¿Quién es quién?**")
-        mapeo: dict[str, str] = {}
-        for nombre_detectado, cantidad in informe.personas.items():
-            propuesto = info.get("mapeo", {}).get(nombre_detectado, "")
-            indice = ids.index(propuesto) + 1 if propuesto in ids else 0
-            elegido = st.selectbox(
-                f"«{nombre_detectado}» ({cantidad} gastos)",
-                [""] + ids,
-                index=indice,
-                format_func=lambda i: nombres.get(i, "— no importar estos gastos —"),
-                key=f"cc_map_{nombre_detectado}",
-            )
-            if elegido:
-                mapeo[nombre_detectado] = elegido
-
-        sin_asignar = [n for n in informe.personas if n not in mapeo]
-        por_defecto = ""
-        if sin_asignar:
-            por_defecto = st.selectbox(
-                f"«{', '.join(sin_asignar)}» no está(n) asignado(s): ¿a quién le cargamos "
-                "esos gastos?",
-                [""] + ids,
-                format_func=lambda i: nombres.get(i, "— omitir esas filas —"),
-                key="cc_import_defecto",
-            )
-
-        confirmo = st.checkbox(
-            "Confirmo que quiero importar estos gastos a este hogar",
-            key="cc_import_confirmo",
+def _preview_y_mapeo(
+    ctx: Contexto,
+    info: dict,
+    importar,
+    clave: str,
+    al_importar=None,
+) -> None:
+    """Muestra el resumen de lo que se va a importar y resuelve quién es quién."""
+    informe = info["informe"]
+    if info.get("origen") == "externa":
+        st.caption("Leyendo la planilla anterior configurada en `hoja_url_legacy`.")
+    elif info.get("origen") == "por_columnas":
+        st.caption(
+            "La pestaña tiene otro nombre, pero la reconocí por sus columnas "
+            "(Fecha, Quien, Concepto, Monto)."
         )
-        if st.button("Importar ahora", type="primary", disabled=not confirmo):
-            resultado = ctx.hogar_ctl().importar_v1(mapeo, por_defecto)
-            if resultado.ok:
-                st.session_state["cc_import_informe"] = resultado.datos
-                st.session_state.pop("cc_import_analisis", None)
-            aplicar(resultado)
+    if info.get("ya_importado"):
+        st.warning(
+            "Este hogar ya importó datos antes ("
+            f"{str(info['ya_importado'])[:16].replace('T', ' ')}). "
+            "Si volvés a importar se van a duplicar."
+        )
+    st.markdown(
+        f"**{info['filas']} gasto(s)** · {ctx.dinero_md(informe.total)} · "
+        f"del {formatear_fecha(informe.desde)} al {formatear_fecha(informe.hasta)}"
+        + (f" · {info['compras']} compra(s) pendientes" if info.get("compras") else "")
+    )
+
+    miembros = info.get("miembros") or []
+    nombres = {m["usuario_id"]: m["nombre"] for m in miembros}
+    ids = list(nombres)
+    if not ids:
+        st.info("Primero sumá personas al hogar.")
+        return
+
+    st.markdown("**¿Quién es quién?**")
+    mapeo: dict[str, str] = {}
+    for nombre_detectado, cantidad in informe.personas.items():
+        propuesto = info.get("mapeo", {}).get(nombre_detectado, "")
+        indice = ids.index(propuesto) + 1 if propuesto in ids else 0
+        elegido = st.selectbox(
+            f"«{nombre_detectado}» ({cantidad} gastos)",
+            [""] + ids,
+            index=indice,
+            format_func=lambda i: nombres.get(i, "— no importar estos gastos —"),
+            key=f"cc_map_{clave}_{nombre_detectado}",
+        )
+        if elegido:
+            mapeo[nombre_detectado] = elegido
+
+    sin_asignar = [n for n in informe.personas if n not in mapeo]
+    por_defecto = ""
+    if sin_asignar:
+        por_defecto = st.selectbox(
+            f"«{', '.join(sin_asignar)}» no está(n) asignado(s): ¿a quién le cargamos "
+            "esos gastos?",
+            [""] + ids,
+            format_func=lambda i: nombres.get(i, "— omitir esas filas —"),
+            key=f"cc_import_defecto_{clave}",
+        )
+
+    confirmo = st.checkbox(
+        "Confirmo que quiero importar estos gastos a este hogar",
+        key=f"cc_import_confirmo_{clave}",
+    )
+    if st.button("Importar ahora", type="primary", disabled=not confirmo, key=f"cc_importar_{clave}"):
+        resultado = importar(mapeo, por_defecto)
+        if resultado.ok:
+            st.session_state["cc_import_informe"] = resultado.datos
+            if al_importar is not None:
+                al_importar()
+        aplicar(resultado)
 
 
 def _sin_pestanas(ctx: Contexto, info: dict) -> None:

@@ -127,19 +127,26 @@ def importar(
     """
     informe = Informe()
     miembros = [m["usuario_id"] for m in repo.miembros(hogar_id)]
-    participantes = miembros
+    if not miembros:
+        informe.errores.append("El hogar no tiene integrantes.")
+        return informe
 
     def resolver(nombre: str) -> str:
         buscado = _clave(nombre)
         for clave, usuario_id in mapa_usuarios.items():
-            if clave.startswith("__"):
-                continue
             if _clave(clave) == buscado:
                 return usuario_id
         return por_defecto
 
-    fechas = []
-    total = 0
+    # El alta masiva la ejecuta quien administra el hogar (el propietario).
+    equipo = repo.miembros(hogar_id)
+    actor = next(
+        (m["usuario_id"] for m in equipo if (m.get("rol") or "") == "propietario"),
+        miembros[0],
+    )
+
+    preparadas: list[dict[str, Any]] = []
+    fechas: list[Any] = []
     for numero, fila in enumerate(normalizar_filas(filas), start=2):
         concepto = (fila.get("concepto") or "").strip()
         try:
@@ -161,48 +168,39 @@ def importar(
                 f"fila {numero}: «{nombre}» no está asignado a nadie del hogar"
             )
             continue
-        categoria = fila.get("categoria") or "Otros"
-        if categoria not in CATEGORIAS:
-            categoria = "Otros"
-        monto = _a_decimal(fila.get("monto"))
-        if not aplicar:
-            informe.importados += 1
-            fechas.append(fecha)
-            total += monto
-            informe.personas[nombre] = informe.personas.get(nombre, 0) + 1
-            continue
-        try:
-            repo.agregar_gasto(
-                hogar_id,
-                quien,
-                concepto,
-                monto,
-                categoria,
-                quien,
-                participantes,
-                fecha=fecha,
-                comprobante=fila.get("comprobante", ""),
-            )
-            informe.importados += 1
-            fechas.append(fecha)
-            total += monto
-            informe.personas[nombre] = informe.personas.get(nombre, 0) + 1
-        except ErrorNegocio as exc:
-            informe.omitidos += 1
-            informe.errores.append(f"fila {numero}: {exc}")
+        preparadas.append(
+            {
+                "concepto": concepto,
+                "fecha": fecha,
+                "monto": fila.get("monto"),
+                "categoria": fila.get("categoria") or "Otros",
+                "pagado_por": quien,
+                "participantes": miembros,
+                "comprobante": fila.get("comprobante", ""),
+            }
+        )
+        informe.personas[nombre] = informe.personas.get(nombre, 0) + 1
+        fechas.append(fecha)
+
+    if not aplicar:
+        informe.importados = len(preparadas)
+
+    if aplicar and preparadas:
+        importados, errores = repo.importar_gastos(hogar_id, actor, preparadas)
+        informe.importados = importados
+        informe.errores.extend(errores)
+        informe.omitidos += len(preparadas) - importados
 
     if aplicar:
-        for compra in normalizar_filas(compras):
-            texto = (compra.get("concepto") or "").strip()
-            if not texto or not miembros:
-                continue
-            try:
-                repo.agregar_compra(hogar_id, miembros[0], texto)
-                informe.compras += 1
-            except ErrorNegocio as exc:
-                informe.errores.append(f"compra: {exc}")
+        textos = [
+            (compra.get("concepto") or "").strip()
+            for compra in normalizar_filas(compras)
+            if (compra.get("concepto") or "").strip()
+        ]
+        if textos:
+            informe.compras = repo.importar_compras(hogar_id, actor, textos)
 
-    informe.total = total
+    informe.total = sum((_a_decimal(f.get("monto")) for f in preparadas), 0)
     informe.desde = min(fechas) if fechas else None
     informe.hasta = max(fechas) if fechas else None
     return informe
@@ -214,6 +212,101 @@ def _clave(texto: str) -> str:
     normalizado = unicodedata.normalize("NFKD", str(texto or ""))
     limpio = "".join(c for c in normalizado if not unicodedata.combining(c))
     return " ".join(limpio.lower().split())
+
+
+def leer_archivo(nombre: str, datos: bytes) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    """Lee un CSV o Excel exportado de la planilla vieja.
+
+    Devuelve `(filas_de_gastos, filas_de_compras)` ya normalizadas. Para Excel usa
+    pandas/openpyxl si están disponibles; si no, pide exportar a CSV.
+    """
+    nombre = (nombre or "").lower()
+    if nombre.endswith((".xlsx", ".xls", ".xlsm")):
+        return _leer_excel(datos)
+    return _leer_csv(datos)
+
+
+def _leer_csv(datos: bytes) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    import csv
+    import io
+
+    texto = None
+    for codificacion in ("utf-8-sig", "utf-8", "latin-1"):
+        try:
+            texto = datos.decode(codificacion)
+            break
+        except UnicodeDecodeError:
+            continue
+    if texto is None:
+        raise ValueError("No pude leer el archivo: probá exportarlo como CSV UTF-8.")
+
+    # Excel en español exporta con `;` y a veces con tabulaciones.
+    muestra = texto[:2000]
+    separador = max((",", ";", "\t"), key=lambda c: muestra.count(c))
+    lector = csv.DictReader(io.StringIO(texto), delimiter=separador)
+    filas = [dict(fila) for fila in lector]
+    if not filas:
+        raise ValueError("El archivo no tiene filas de datos.")
+
+    gastos = _separar(filas, COLUMNAS_GASTOS)
+    compras = _separar(filas, COLUMNAS_COMPRAS)
+    if not gastos and compras:
+        return [], compras
+    if not gastos:
+        raise ValueError(
+            "El archivo no tiene las columnas de gastos (Fecha, Quien, Concepto, Monto)."
+        )
+    return gastos, compras
+
+
+def _leer_excel(datos: bytes) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    try:
+        import io
+
+        import pandas as pd
+    except ImportError as exc:  # pragma: no cover - depende del despliegue
+        raise ValueError(
+            "Para leer Excel falta `pandas` y `openpyxl`. Exportá la planilla como "
+            "CSV y subila así."
+        ) from exc
+
+    try:
+        hojas = pd.read_excel(io.BytesIO(datos), sheet_name=None, dtype=str)
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError(f"No pude leer el Excel: {exc}") from exc
+
+    gastos: list[dict[str, str]] = []
+    compras: list[dict[str, str]] = []
+    for nombre_hoja, tabla in hojas.items():
+        filas = [
+            {str(k): ("" if v is None else str(v)) for k, v in fila.items()}
+            for fila in tabla.to_dict(orient="records")
+        ]
+        if not filas:
+            continue
+        encontrados = _separar(filas, COLUMNAS_GASTOS)
+        if encontrados and not gastos:
+            gastos = encontrados
+            continue
+        encontrados = _separar(filas, COLUMNAS_COMPRAS)
+        if encontrados and not compras:
+            compras = encontrados
+    if not gastos:
+        raise ValueError(
+            "No encontré una hoja con las columnas de gastos "
+            "(Fecha, Quien, Concepto, Monto)."
+        )
+    return gastos, compras
+
+
+def _separar(filas: list[dict[str, Any]], columnas: tuple[str, ...]) -> list[dict[str, str]]:
+    """Devuelve las filas normalizadas si tienen todas esas columnas."""
+    if not filas:
+        return []
+    encabezados = [_clave(k) for k in filas[0]]
+    if not all(_clave(c) in encabezados for c in columnas):
+        return []
+    return normalizar_filas(filas)
 
 
 def proponer_mapeo(

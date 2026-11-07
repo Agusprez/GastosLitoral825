@@ -9,20 +9,34 @@ La v2 escribe en **pestañas nuevas** (`cc_usuarios`, `cc_gastos`, …) dentro d
 **misma** planilla. Las pestañas viejas no se tocan: se pueden quedar como respaldo
 o borrarse cuando confirmes que todo migró.
 
-## Opción A (recomendada): desde la app, sin tocar nada
+## Opción A (recomendada): subir el archivo, sin tocar nada
 
-Todo ocurre donde ya están las credenciales, así que no hace falta configurar nada
-en tu computadora:
+Todo ocurre donde ya están las credenciales, y **sin leer la planilla** (no consume
+la cuota de lecturas de Google): sólo se escribe una vez, en bloque.
 
-1. Entrá a la app con tu cuenta y elegí el hogar destino (tiene que ser del plan Pro:
-   Gratis permite 200 gastos por mes).
-2. *Hogar → Ajustes → **📥 Importar los gastos de la planilla anterior***.
-3. Vas a ver un resumen: cuántas filas hay, el total, el rango de fechas y cuántas
-   compras pendientes.
-4. Asigná cada nombre de la planilla a la persona del hogar. Si aparece un nombre que
-   no está en el hogar (por ejemplo, alguien que ya no usa la app), elegí a quién
-   cargarle esos gastos o dejalo en "no importar".
+1. En la planilla vieja: *Archivo → Descargar → CSV* de la pestaña `Gastos`
+   (o descargá el Excel completo, con las dos pestañas).
+2. En la app: elegí el hogar destino (tiene que ser Pro: Gratis permite 200 gastos
+   por mes) y andá a *Hogar → Ajustes → **📥 Importar los gastos anteriores***.
+3. Subí el CSV o Excel. Vas a ver el resumen: cuántos gastos, el total, el rango de
+   fechas y las compras pendientes.
+4. Asigná cada nombre de la planilla a la persona del hogar (la app propone las
+   coincidencias por nombre y email). Los nombres que no estén se pueden mandar a
+   una persona o dejar afuera.
 5. Marcá la confirmación y **Importar ahora**.
+
+## Opción B: leer las pestañas viejas de la planilla
+
+Si los datos están en la misma planilla de la app, el panel también las busca
+(`Gastos`, `Lista_Compras`, o cualquier pestaña con las columnas `Fecha, Quien,
+Concepto, Monto`). Se lee sólo cuando apretás el botón, para no consumir cuota.
+
+Si están en **otra planilla**, agregá su URL en los Secretos:
+`hoja_url_legacy = "https://docs.google.com/spreadsheets/d/.../edit"` (la cuenta de
+servicio necesita acceso de lectura). La app te muestra qué pestañas ve, para que
+puedas confirmar.
+
+## Antes de importar
 
 Detalles:
 

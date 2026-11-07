@@ -17,6 +17,7 @@ pandas_falso.instalar()
 streamlit_falso.instalar()
 
 from cuentasclaras.modelos import datos_demo as seed  # noqa: E402
+from cuentasclaras.modelos import migracion  # noqa: E402
 from cuentasclaras.modelos.almacen import MemoryStore  # noqa: E402
 from cuentasclaras.modelos.archivos import MediosLocal  # noqa: E402
 from cuentasclaras.modelos.configuracion import armar  # noqa: E402
@@ -473,7 +474,8 @@ class TestImportarDesdeLaApp(BaseVistas):
         self._analizar()
         self.correr(hogar.render, self.ctx)
         textos = " ".join(str(args[0]) for (args, _) in streamlit_falso.llamadas("markdown"))
-        self.assertIn("2 fila(s) en «Gastos»", textos)
+        self.assertIn("2 gasto(s)", textos)
+        self.assertIn("80.500,00", textos)
         self.assertEqual(self.fallos(), [])
         self.assertEqual(self.dolares_peligrosos(), [])
 
@@ -500,6 +502,67 @@ class TestImportarDesdeLaApp(BaseVistas):
         codigos = " ".join(str(args[0]) for (args, _) in streamlit_falso.llamadas("code"))
         self.assertIn("Gastos 2025", codigos)        # lista de pestañas visibles
         self.assertIn("hoja_url_legacy", codigos)    # instrucción de configuración
+
+
+class TestImportarDesdeArchivo(BaseVistas):
+    """Subir el CSV evita leer Google: sólo una escritura en bloque."""
+
+    CSV = (
+        "Fecha;Quien;Concepto;Monto;Categoria\n"
+        "05/10/2026;Ana;Compra Coto;48500;Supermercado\n"
+        "12/10/2026;Bruno;Nafta;32000;Auto\n"
+        "20/10/2026;Ana;Internet;21500;Internet\n"
+    )
+
+    class _Archivo:
+        name = "gastos.csv"
+
+        def __init__(self, datos: bytes) -> None:
+            self._datos = datos
+
+        def getvalue(self) -> bytes:
+            return self._datos
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.lecturas = 0
+
+        def leer(titulo: str):
+            self.lecturas += 1
+            return []
+
+        self.store.leer_pestana = leer
+        self.store.buscar_pestana_por_columnas = lambda columnas: None
+        streamlit_falso.ARCHIVO_SUBIDO = self._Archivo(self.CSV.encode("utf-8"))
+
+    def test_previsualiza_sin_leer_google(self):
+        self.correr(hogar.render, self.ctx)
+        textos = " ".join(str(args[0]) for (args, _) in streamlit_falso.llamadas("markdown"))
+        self.assertIn("3 gasto(s)", textos)
+        self.assertIn("102.000,00", textos)
+        self.assertEqual(self.lecturas, 0)  # no se tocó la planilla
+        self.assertEqual(self.fallos(), [])
+
+    def test_importa_las_filas_del_archivo(self):
+        filas, compras = migracion.leer_archivo("gastos.csv", self.CSV.encode("utf-8"))
+        datos = self.ctx.hogar_ctl().analizar_filas(filas, compras).datos
+        mapeo = {"Ana": datos["mapeo"].get("Ana") or self.usuario["id"]}
+        mapeo["Bruno"] = self.usuario["id"]
+        antes = len(self.repo.gastos(self.hogar["id"], self.usuario["id"]))
+
+        resultado = self.ctx.hogar_ctl().importar_filas(filas, mapeo, compras=compras)
+
+        self.assertTrue(resultado.ok, resultado.mensaje)
+        self.assertEqual(resultado.datos.importados, 3)
+        gastos = self.repo.gastos(self.hogar["id"], self.usuario["id"])
+        self.assertEqual(len(gastos), antes + 3)
+        self.assertIn("Internet", {g["concepto"] for g in gastos})
+
+    def test_archivo_ilegible(self):
+        streamlit_falso.ARCHIVO_SUBIDO = self._Archivo(b"")
+        self.correr(hogar.render, self.ctx)
+        errores = " ".join(str(args[0]) for (args, _) in streamlit_falso.llamadas("error"))
+        self.assertIn("No pude leer el archivo", errores)
 
 
 class TestEspacioHuggingFace(unittest.TestCase):

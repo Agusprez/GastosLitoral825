@@ -752,6 +752,112 @@ class Repositorio:
     # ------------------------------------------------------------------ #
     # Compras
     # ------------------------------------------------------------------ #
+    def importar_gastos(
+        self, hogar_id: str, actor_id: str, filas: Iterable[Mapping[str, Any]]
+    ) -> tuple[int, list[str]]:
+        """Alta masiva de gastos (migración): valida todo y escribe de una sola vez.
+
+        Devuelve `(importados, errores)`. Respeta el límite mensual del plan y el
+        reparto en partes iguales entre los miembros del hogar.
+        """
+        self.exigir(hogar_id, actor_id, "admin")
+        hogar = self.store.uno("hogares", hogar_id)
+        plan = plans.normalizar_plan((hogar or {}).get("plan"))
+        miembros = [m["usuario_id"] for m in self.miembros(hogar_id)]
+        if not miembros:
+            raise ErrorNegocio("El hogar no tiene integrantes.")
+
+        preparadas: list[dict[str, str]] = []
+        errores: list[str] = []
+        por_mes: dict[str, int] = {}
+        for numero, fila in enumerate(filas, start=2):
+            concepto = _limpiar(fila.get("concepto"), MAX_CONCEPTO)
+            pagado_por = str(fila.get("pagado_por") or "")
+            if len(concepto) < 2:
+                errores.append(f"fila {numero}: sin detalle")
+                continue
+            if pagado_por not in miembros:
+                errores.append(f"fila {numero}: la persona no pertenece al hogar")
+                continue
+            try:
+                valor = _validar_monto(fila.get("monto"))
+                fecha = parsear_fecha(fila.get("fecha"))
+            except (ErrorNegocio, ValueError) as exc:
+                errores.append(f"fila {numero}: {exc}")
+                continue
+            categoria = fila.get("categoria")
+            if categoria not in CATEGORIAS:
+                categoria = "Otros"
+            participantes = [p for p in (fila.get("participantes") or miembros) if p in miembros]
+            if not participantes:
+                participantes = list(miembros)
+            division = balances.repartir(valor, participantes)
+            preparadas.append(
+                {
+                    "id": nuevo_id(),
+                    "hogar_id": hogar_id,
+                    "fecha": fecha.isoformat(),
+                    "concepto": concepto,
+                    "monto": monto_texto(valor),
+                    "categoria": categoria,
+                    "pagado_por": pagado_por,
+                    "division": balances.division_json(division),
+                    "comprobante": str(fila.get("comprobante") or ""),
+                    "creado_por": pagado_por,
+                    "creado_en": iso(),
+                    "estado": "activo",
+                }
+            )
+            mes = fecha.strftime("%Y-%m")
+            por_mes[mes] = por_mes.get(mes, 0) + 1
+
+        if plan == plans.GRATIS:
+            for mes, cantidad in por_mes.items():
+                disponible = plans.limites(plan)["gastos_mes"]
+                if disponible is None:
+                    continue
+                actuales = self._gastos_del_mes(hogar_id, mes)
+                if actuales + cantidad > disponible:
+                    raise LimiteAlcanzado(
+                        f"El plan Gratis permite {disponible} gastos por mes y la "
+                        f"importación agregaría {cantidad} a {mes} "
+                        f"(ya hay {actuales}). Pasá el hogar a Pro para importar.",
+                        plan=plan,
+                    )
+
+        if preparadas:
+            self.store.insert_many("gastos", preparadas)
+            self._auditar(
+                hogar_id, actor_id, "gastos_importados", f"{len(preparadas)} gastos"
+            )
+        return len(preparadas), errores
+
+    def importar_compras(
+        self, hogar_id: str, actor_id: str, textos: Iterable[str]
+    ) -> int:
+        """Alta masiva de ítems en la lista de compras."""
+        self.exigir(hogar_id, actor_id, "miembro")
+        filas = []
+        for texto in textos:
+            limpio = _limpiar(texto, MAX_TEXTO_COMPRA)
+            if len(limpio) < 2:
+                continue
+            filas.append(
+                {
+                    "id": nuevo_id(),
+                    "hogar_id": hogar_id,
+                    "texto": limpio,
+                    "estado": "pendiente",
+                    "anotado_por": actor_id,
+                    "fecha": hoy().isoformat(),
+                    "comprado_por": "",
+                    "comprado_en": "",
+                }
+            )
+        if filas:
+            self.store.insert_many("compras", filas)
+        return len(filas)
+
     def agregar_compra(self, hogar_id: str, usuario_id: str, texto: str) -> dict[str, Any]:
         self.exigir(hogar_id, usuario_id, "miembro")
         limpio = _limpiar(texto, MAX_TEXTO_COMPRA)

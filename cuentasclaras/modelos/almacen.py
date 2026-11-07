@@ -123,6 +123,14 @@ class Store(ABC):
         """Filas de una pestaña ajena al esquema (migraciones). Sin pestañas acá."""
         return []
 
+    def insert_many(self, tabla: str, filas: Iterable[Mapping[str, Any]]) -> int:
+        """Inserta varias filas. Por defecto, una por una."""
+        total = 0
+        for fila in filas:
+            self.insert(tabla, fila)
+            total += 1
+        return total
+
 
 class MemoryStore(Store):
     """Store en memoria: rápido, descartable. Base de los tests."""
@@ -599,6 +607,32 @@ class SheetsStore(Store):
             range_name=f"A{numero}", values=[[fila[c] for c in TABLAS[tabla]]]
         )
         self._invalidar(tabla)
+
+    def insert_many(self, tabla: str, filas: Iterable[Mapping[str, Any]]) -> int:
+        """Escribe varias filas en **una sola** llamada a la API.
+
+        Importar 100 gastos de a uno agota la cuota de escritura de Google (60 por
+        minuto); con `append_rows` es una sola escritura.
+        """
+        datos: list[dict[str, str]] = []
+        for fila in filas:
+            normal = normalizar(tabla, fila)
+            if not normal["id"]:
+                normal["id"] = nuevo_id()
+            datos.append(normal)
+        if not datos:
+            return 0
+        hoja = self._hoja(tabla)
+        valores = [[d[c] for c in TABLAS[tabla]] for d in datos]
+        try:
+            _con_reintentos(
+                lambda: hoja.append_rows(valores, value_input_option="RAW")
+            )
+        except AttributeError:  # gspread viejo sin `append_rows`: de a una
+            for valor in valores:
+                hoja.append_row(valor, value_input_option="RAW")
+        self._invalidar(tabla)
+        return len(datos)
 
     def delete(self, tabla: str, id_fila: str) -> None:
         numero = self._numero_fila(tabla, id_fila)

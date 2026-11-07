@@ -114,6 +114,28 @@ class ControladorHogar(Controlador):
         except Exception:  # noqa: BLE001
             return []
 
+    def _datos_analisis(
+        self,
+        filas: list[dict[str, str]],
+        compras: list[dict[str, str]],
+        origen: str,
+    ) -> dict[str, Any]:
+        """Arma el resumen + mapeo propuesto para una fuente de datos cualquiera."""
+        informe = migracion.analizar(filas)
+        miembros = self.repo.miembros(self.hogar_id)
+        mapeo = migracion.proponer_mapeo(informe.personas, miembros)
+        ya = self.repo.buscar_evento(self.hogar_id, ACCION_IMPORTACION)
+        return {
+            "filas": len(filas),
+            "compras": len(compras),
+            "origen": origen,
+            "informe": informe,
+            "miembros": miembros,
+            "mapeo": mapeo,
+            "ya_importado": (ya or {}).get("creado_en", ""),
+            "sin_asignar": [n for n in informe.personas if n not in mapeo],
+        }
+
     def analizar_importacion(self) -> Resultado:
         """Lee las pestañas de la v1 y propone a quién corresponde cada nombre."""
         try:
@@ -131,29 +153,68 @@ class ControladorHogar(Controlador):
                         "compras": 0,
                         "origen": origen,
                         "pestanas": self._pestanas_visibles(),
-                        "hoja_legacy": (getattr(self.config, "hoja_url_legacy", "") or "").strip(),
+                        "hoja_legacy": (
+                            getattr(self.config, "hoja_url_legacy", "") or ""
+                        ).strip(),
                     },
                 )
-            informe = migracion.analizar(filas)
-            miembros = self.repo.miembros(self.hogar_id)
-            mapeo = migracion.proponer_mapeo(informe.personas, miembros)
-            ya = self.repo.buscar_evento(self.hogar_id, ACCION_IMPORTACION)
+            datos = self._datos_analisis(filas, compras, origen)
+            datos["pestanas"] = self._pestanas_visibles()
+            return Resultado.exito("", datos)
+        except Exception as exc:  # noqa: BLE001
+            return Resultado.error(str(exc))
+
+    def analizar_filas(
+        self,
+        filas: list[dict[str, str]],
+        compras: list[dict[str, str]] | None = None,
+    ) -> Resultado:
+        """Igual que `analizar_importacion`, pero con filas ya cargadas (archivo)."""
+        try:
+            if self.rol != "propietario":
+                return Resultado.error(
+                    "Sólo quien es propietario/a del hogar puede importar los datos."
+                )
+            if not filas:  # puede venir sólo la lista de compras
+                return Resultado.aviso(
+                    "El archivo no tiene filas de gastos.", {"filas": 0, "compras": 0}
+                )
             return Resultado.exito(
-                "",
-                {
-                    "filas": len(filas),
-                    "compras": len(compras),
-                    "origen": origen,
-                    "informe": informe,
-                    "miembros": miembros,
-                    "mapeo": mapeo,
-                    "ya_importado": (ya or {}).get("creado_en", ""),
-                    "sin_asignar": [n for n in informe.personas if n not in mapeo],
-                    "pestanas": self._pestanas_visibles(),
-                },
+                "", self._datos_analisis(filas, compras or [], "archivo")
             )
         except Exception as exc:  # noqa: BLE001
             return Resultado.error(str(exc))
+
+    def _importar(
+        self,
+        filas: list[dict[str, str]],
+        compras: list[dict[str, str]],
+        mapeo: dict[str, str],
+        por_defecto: str,
+    ) -> Resultado:
+        informe = migracion.importar(
+            self.repo,
+            self.hogar_id,
+            filas,
+            mapeo,
+            aplicar=True,
+            compras=compras,
+            por_defecto=por_defecto,
+        )
+        self.repo.registrar_evento(
+            self.hogar_id,
+            self.usuario_id,
+            ACCION_IMPORTACION,
+            f"{informe.importados} gastos, {informe.compras} compras",
+        )
+        mensaje = (
+            f"Importamos {informe.importados} gasto(s)"
+            + (f" y {informe.compras} compra(s)" if informe.compras else "")
+            + "."
+        )
+        if informe.omitidos:
+            mensaje += f" Quedaron {informe.omitidos} fila(s) sin importar."
+        return Resultado.exito(mensaje, informe)
 
     def importar_v1(
         self, mapeo: dict[str, str], por_defecto: str = ""
@@ -167,29 +228,26 @@ class ControladorHogar(Controlador):
             filas, compras, _origen = self._pestanas_v1()
             if not filas and not compras:
                 return Resultado.error("No hay datos de la planilla vieja para importar.")
-            informe = migracion.importar(
-                self.repo,
-                self.hogar_id,
-                filas,
-                mapeo,
-                aplicar=True,
-                compras=compras,
-                por_defecto=por_defecto,
-            )
-            self.repo.registrar_evento(
-                self.hogar_id,
-                self.usuario_id,
-                ACCION_IMPORTACION,
-                f"{informe.importados} gastos, {informe.compras} compras",
-            )
-            mensaje = (
-                f"Importamos {informe.importados} gasto(s)"
-                + (f" y {informe.compras} compra(s)" if informe.compras else "")
-                + "."
-            )
-            if informe.omitidos:
-                mensaje += f" Quedaron {informe.omitidos} fila(s) sin importar."
-            return Resultado.exito(mensaje, informe)
+            return self._importar(filas, compras, mapeo, por_defecto)
+        except Exception as exc:  # noqa: BLE001
+            return Resultado.error(str(exc))
+
+    def importar_filas(
+        self,
+        filas: list[dict[str, str]],
+        mapeo: dict[str, str],
+        por_defecto: str = "",
+        compras: list[dict[str, str]] | None = None,
+    ) -> Resultado:
+        """Importa gastos desde un archivo (CSV/Excel) subido a la app."""
+        try:
+            if self.rol != "propietario":
+                return Resultado.error(
+                    "Sólo quien es propietario/a del hogar puede importar los datos."
+                )
+            if not filas:
+                return Resultado.error("No hay filas para importar.")
+            return self._importar(filas, compras or [], mapeo, por_defecto)
         except Exception as exc:  # noqa: BLE001
             return Resultado.error(str(exc))
 
