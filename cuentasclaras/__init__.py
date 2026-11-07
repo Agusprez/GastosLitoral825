@@ -14,4 +14,4 @@ __version__ = "2.1.0"
 
 # Se muestra en la barra lateral para saber de un vistazo qué versión está
 # desplegada (Streamlit Cloud a veces tarda en reiniciar tras un push).
-BUILD = "2026-11-07 · cámara"
+BUILD = "2026-11-07 · cámara a pedido"

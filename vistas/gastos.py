@@ -43,7 +43,7 @@ def _formulario(ctx: Contexto, miembros: list[dict[str, Any]]) -> None:
 
     # El selector va fuera del formulario: cambiarlo tiene que redibujar el widget
     # de la foto (dentro del form no habría rerun hasta apretar "Guardar").
-    opciones_ticket = ["📷 Abrir la cámara", "🖼️ Elegir de la galería", "Sin comprobante"]
+    opciones_ticket = ["📷 Sacar foto", "🖼️ Elegir de la galería", "Sin comprobante"]
     if st.session_state.get("cc_fuente_ticket") not in opciones_ticket:
         st.session_state.pop("cc_fuente_ticket", None)  # valor viejo de otra versión
     fuente = st.radio(
@@ -53,6 +53,37 @@ def _formulario(ctx: Contexto, miembros: list[dict[str, Any]]) -> None:
         key="cc_fuente_ticket",
         label_visibility="collapsed",
     )
+
+    en_camara = fuente == "📷 Sacar foto"
+    camara_abierta = bool(st.session_state.get("cc_camara_abierta"))
+    if camara_abierta and not en_camara:
+        # Cambió de opción: se cierra la cámara, no queda prendida de fondo.
+        st.session_state["cc_camara_abierta"] = False
+        camara_abierta = False
+
+    # La cámara vive FUERA del formulario y sólo se monta cuando la abren: así el
+    # visor no queda encendido mientras se completa el resto del gasto.
+    foto_camara = None
+    if en_camara:
+        if camara_abierta:
+            foto_camara = st.camera_input(
+                "Foto del ticket",
+                help="Tomá la foto y después completá el gasto y guardá.",
+                key="cc_foto_ticket",
+            )
+            if st.button("✖️ Cerrar la cámara", use_container_width=True):
+                st.session_state["cc_camara_abierta"] = False
+                st.rerun()
+        else:
+            st.caption(
+                "La cámara se enciende sólo cuando la abrís, y se apaga al guardar "
+                "o al cambiar de opción."
+            )
+            if st.button(
+                "📷 Abrir la cámara", type="primary", use_container_width=True
+            ):
+                st.session_state["cc_camara_abierta"] = True
+                st.rerun()
 
     with st.form("nuevo_gasto", clear_on_submit=True):
         col1, col2 = st.columns(2)
@@ -78,22 +109,13 @@ def _formulario(ctx: Contexto, miembros: list[dict[str, Any]]) -> None:
             help="Si pagaste algo sólo para otra persona, dejá únicamente a esa persona.",
         )
 
-        foto_camara = None
         foto_galeria = None
-        if fuente != "Sin comprobante":
-            if fuente == "📷 Abrir la cámara":
-                foto_camara = st.camera_input(
-                    "Sacar la foto del ticket",
-                    help="Se abre la cámara del navegador sobre esta misma pantalla. "
-                    "Si el celular no la habilita (permiso o navegador interno de "
-                    "WhatsApp), usá el selector de abajo.",
-                    key="cc_foto_ticket",
-                )
+        if fuente == "🖼️ Elegir de la galería":
             foto_galeria = st.file_uploader(
-                "…o elegí una foto guardada",
+                "Foto del ticket",
                 type=["jpg", "jpeg", "png", "webp"],
                 key="cc_archivo_ticket",
-                help="Abre la galería (o la cámara nativa, según el celular).",
+                help="Abre la galería; en el celular también suele ofrecer «Cámara».",
             )
         if ctx.aviso_medios:
             st.warning(ctx.aviso_medios)
@@ -103,8 +125,10 @@ def _formulario(ctx: Contexto, miembros: list[dict[str, Any]]) -> None:
 
     if not enviado:
         return
-    # Si hay foto de la cámara y además un archivo, gana la cámara.
+    # Si hay foto de la cámara y además un archivo, gana la cámara. Al guardar se
+    # apaga la cámara para que no quede prendida.
     subido = foto_camara or foto_galeria
+    st.session_state["cc_camara_abierta"] = False
     ejecutar(
         lambda: ctx.gastos().agregar(
             concepto,

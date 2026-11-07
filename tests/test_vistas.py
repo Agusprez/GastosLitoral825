@@ -593,16 +593,30 @@ class TestCamaraDelTicket(BaseVistas):
         opciones = " ".join(
             str(k.get("options")) for (_, k) in streamlit_falso.llamadas("radio")
         )
-        self.assertIn("Abrir la cámara", opciones)
+        self.assertIn("Sacar foto", opciones)
+        self.assertIn("Elegir de la galería", opciones)
 
-    def test_con_camara_elegida_abre_el_widget_y_la_galeria(self):
-        streamlit_falso.ESTADO["cc_fuente_ticket"] = "📷 Abrir la cámara"
-        streamlit_falso.ARCHIVO_SUBIDO = self.foto
+    def test_camara_apagada_por_defecto(self):
+        """La cámara no se enciende sola al entrar a la pantalla."""
+        self.correr(gastos.render, self.ctx)
+        self.assertFalse(streamlit_falso.llamadas("camera_input"))
+        etiquetas = " ".join(str(args[0]) for (args, _) in streamlit_falso.llamadas("button"))
+        self.assertIn("Abrir la cámara", etiquetas)
+
+    def test_camara_abierta_a_pedido(self):
+        streamlit_falso.ESTADO["cc_fuente_ticket"] = "📷 Sacar foto"
+        streamlit_falso.ESTADO["cc_camara_abierta"] = True
         self.correr(gastos.render, self.ctx)
         self.assertTrue(streamlit_falso.llamadas("camera_input"))
-        # La galería sigue disponible como alternativa.
-        etiquetas = " ".join(str(a[0]) for (a, _) in streamlit_falso.llamadas("file_uploader"))
-        self.assertIn("elegí una foto guardada", etiquetas)
+        etiquetas = " ".join(str(args[0]) for (args, _) in streamlit_falso.llamadas("button"))
+        self.assertIn("Cerrar la cámara", etiquetas)
+
+    def test_cambiar_de_opcion_apaga_la_camara(self):
+        streamlit_falso.ESTADO["cc_fuente_ticket"] = "🖼️ Elegir de la galería"
+        streamlit_falso.ESTADO["cc_camara_abierta"] = True
+        self.correr(gastos.render, self.ctx)
+        self.assertFalse(streamlit_falso.ESTADO.get("cc_camara_abierta"))
+        self.assertFalse(streamlit_falso.llamadas("camera_input"))
 
     def test_sin_comprobante_no_muestra_widgets(self):
         streamlit_falso.ESTADO["cc_fuente_ticket"] = "Sin comprobante"
@@ -611,7 +625,7 @@ class TestCamaraDelTicket(BaseVistas):
         self.assertFalse(streamlit_falso.llamadas("file_uploader"))
 
     def test_valor_viejo_del_selector_no_rompe(self):
-        streamlit_falso.ESTADO["cc_fuente_ticket"] = "📷 Sacar foto"  # versión anterior
+        streamlit_falso.ESTADO["cc_fuente_ticket"] = "📷 Abrir la cámara"  # versión anterior
         self.correr(gastos.render, self.ctx)
         self.assertEqual(self.fallos(), [])
         self.assertNotIn("cc_fuente_ticket", streamlit_falso.ESTADO)
