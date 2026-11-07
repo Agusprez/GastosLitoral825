@@ -76,25 +76,89 @@ Con VPS tenés disco propio: podés usar `almacen = "sqlite"` y comprobantes loc
 
 ### Docker
 
-```dockerfile
-FROM python:3.11-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-EXPOSE 8501
-CMD ["streamlit", "run", "app.py", "--server.port", "8501", "--server.headless", "true"]
-```
+El repo ya trae un `Dockerfile` listo (instala dependencias, expone 8501 y define
+un healthcheck en `/_stcore/health`):
 
 ```bash
 docker build -t cuentasclaras .
 docker run -d --name cuentasclaras -p 8501:8501 \
-  -v "$PWD/.streamlit/secrets.toml:/app/.streamlit/secrets.toml:ro" \
-  -v "$PWD/data:/app/data" \
+  -e CUENTASCLARAS_HOJA_URL="https://docs.google.com/spreadsheets/d/XXXX/edit" \
+  -e CUENTASCLARAS_GCP_CREDENCIALES="$(cat service-account.json | tr -d '\n')" \
+  -e CUENTASCLARAS_CLAVE_CIFRADO="la-clave" \
+  -e CUENTASCLARAS_IMGBB_API_KEY="la-api-key" \
   cuentasclaras
 ```
 
-Si usás SQLite, el volumen `data` es obligatorio y contiene la clave de cifrado.
+Si usás SQLite o comprobantes en disco, montá un volumen en `/app/data` (ahí viven
+la base, la clave y las imágenes).
+
+## Opción C — landing estática en GitHub Pages (gratis)
+
+GitHub Pages **sólo sirve archivos estáticos**: no puede correr Streamlit (necesita
+Python, sesiones y las credenciales de Google). Lo que sí conviene publicar ahí es
+la landing de venta, que ya está lista en `web/index.html`.
+
+1. En GitHub: *Settings → Pages*.
+2. *Source*: **Deploy from a branch** → *Branch*: `main` → carpeta **`/web`** → *Save*.
+3. En un minuto queda en `https://agusprez.github.io/GastosLitoral825/`.
+
+Los botones de esa landing ya apuntan a la app (`litoral825.streamlit.app`). Si
+cambiás de dominio, buscá y reemplazá esa URL en `web/index.html`.
+
+## ¿Hostear la app gratis? Comparación
+
+La app es **sin estado** (los datos viven en Google Sheets y las fotos en imgbb), así
+que cualquier host que corra Python sirve. Los límites de los planes gratuitos
+cambian seguido: confirmalos en la página del proveedor antes de decidir.
+
+| Servicio | Gratis | Se duerme | Memoria | Secretos | Cuándo conviene |
+| --- | --- | --- | --- | --- | --- |
+| **Streamlit Community Cloud** | Sí | Tras varias horas sin uso | ~1 GB | Secrets (TOML) | Es donde ya está. Cero configuración, pero sin SLA. |
+| **Hugging Face Spaces** (SDK Streamlit) | Sí | Tras ~48 h sin uso | 16 GB / 2 vCPU | *Settings → Secrets* | La mejor RAM gratis y el sueño más largo. Ideal para uso familiar. |
+| **Render** (free web service) | Sí | A los ~15 min sin tráfico | 512 MB | *Environment* | Fácil de conectar al repo; el arranque en frío tarda ~30-60 s. |
+| **Google Cloud Run** | Cupo mensual gratis (pide tarjeta) | Scale to zero | configurable | Secret Manager / env | Si ya usás Google Cloud y querés HTTPS propio. |
+| **Fly.io** | Cupo chico (pide tarjeta) | No | 256-512 MB | `fly secrets` | Control fino, regiones cercanas. |
+| **Oracle Cloud Always Free** | Sí (VM ARM) | No | hasta 24 GB | variables de entorno | "Siempre encendido" sin pagar, pero administrás el sistema operativo. |
+| **VPS chico** | No (~USD 4-5/mes) | No | 1 GB | archivo | Lo más predecible para vender el servicio. |
+
+**Recomendación:** para uso familiar gratis, Hugging Face Spaces o quedarse en
+Streamlit Cloud (con el sueño, que sólo agrega unos segundos al primer acceso). Para
+venderlo con SLA, un VPS o Cloud Run.
+
+### Receta: Hugging Face Spaces
+
+1. `huggingface.co/new-space` → SDK **Streamlit** → visibilidad pública (los Spaces
+   privados free también duermen).
+2. Subí el repo (`app.py`, `cuentasclaras/`, `vistas/`, `requirements.txt`).
+   El `README.md` del Space necesita esta cabecera:
+
+   ```yaml
+   ---
+   title: Cuentas Claras
+   emoji: 💸
+   colorFrom: teal
+   colorTo: green
+   sdk: streamlit
+   sdk_version: 1.37.0
+   app_file: app.py
+   pinned: false
+   ---
+   ```
+
+3. *Settings → Variables and secrets*: `CUENTASCLARAS_HOJA_URL`,
+   `CUENTASCLARAS_GCP_CREDENCIALES` (JSON en una línea),
+   `CUENTASCLARAS_CLAVE_CIFRADO`, `CUENTASCLARAS_IMGBB_API_KEY`,
+   `CUENTASCLARAS_ADMINS`.
+4. *Factory rebuild* y listo: `https://usuario-cuentas-claras.hf.space`.
+
+### Receta: Render
+
+1. *New → Web Service* → conectá el repo.
+2. Runtime **Docker** (usa el `Dockerfile` del repo) o **Python** con
+   `streamlit run app.py --server.port $PORT --server.address 0.0.0.0`.
+3. *Environment*: las mismas variables `CUENTASCLARAS_*` del ejemplo de arriba.
+4. Plan **Free** → *Deploy*. La primera visita después de 15 minutos tarda en
+   despertar.
 
 ## Variables de entorno (alternativa a los secretos)
 
@@ -112,10 +176,15 @@ Cualquier clave de configuración se puede pasar como `CUENTASCLARAS_*`:
 | `CUENTASCLARAS_ADMINS` | `a@x.com,b@x.com` | Panel de plataforma |
 | `CUENTASCLARAS_REGISTRO_ABIERTO` | `0` | Cerrar inscripciones |
 | `CUENTASCLARAS_MEDIOS` | `imgbb` \| `drive` \| `local` | Comprobantes |
+| `CUENTASCLARAS_IMGBB_API_KEY` | `abc123…` | Subir comprobantes a imgbb |
 | `CUENTASCLARAS_DRIVE_CARPETA_ID` | `1AbC…` | Carpeta de Drive |
+| `CUENTASCLARAS_URL_PUBLICA` | `https://…` | Link que va en las invitaciones |
 | `CUENTASCLARAS_PRECIO_MENSUAL` | `4.900` | Precio mostrado |
 | `CUENTASCLARAS_PRECIO_ANUAL` | `49.000` | Precio mostrado |
 | `CUENTASCLARAS_DEMO` | `1` | Datos de ejemplo (nunca en producción) |
+
+`CUENTASCLARAS_GCP_CREDENCIALES` acepta el JSON completo en una sola línea (es la
+forma práctica en hosts con contenedores): la app lo detecta y lo parsea.
 
 ## Checklist antes de abrir al público
 

@@ -602,6 +602,24 @@ class TestConfiguracion(unittest.TestCase):
         )
         self.assertEqual(armar({"almacen": "memoria", "url_publica": ""}).url_publica, "https://litoral825.streamlit.app")
 
+    def test_credenciales_como_json_en_variable_de_entorno(self):
+        """En Render/Fly/Cloud Run la service account viaja como JSON en una variable."""
+        texto = '{"type": "service_account", "client_email": "x@y.iam.gserviceaccount.com"}'
+        config = armar(
+            {
+                "gcp_credenciales": texto,
+                "hoja_url": "https://docs.google.com/spreadsheets/d/x/edit",
+            }
+        )
+        self.assertIsInstance(config.gcp_credenciales, dict)
+        self.assertEqual(config.gcp_credenciales["type"], "service_account")
+        self.assertEqual(config.almacen, "sheets")
+
+    def test_credenciales_json_invalido_no_rompe(self):
+        config = armar({"gcp_credenciales": "{no es json", "hoja_url": "x"})
+        self.assertIsNone(config.gcp_credenciales)
+        self.assertEqual(config.almacen, "sqlite")
+
     def test_otros_ajustes_anidados(self):
         config = armar(
             {

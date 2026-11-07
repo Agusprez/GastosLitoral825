@@ -72,7 +72,7 @@ vistas/                     V · pantallas Streamlit
   landing.py inicio.py gastos.py compras.py hogar.py cuenta.py planes.py admin.py
 tools/                      Clave, importación de la v1, cifrado de datos existentes
 tests/                      Modelo, controladores, vistas (dobles), end-to-end
-web/landing.html            Landing estática para publicar aparte
+web/index.html              Landing estática para publicar en GitHub Pages
 legacy/                     La app original, como referencia
 ```
 
@@ -176,7 +176,8 @@ Si ya tenías datos de la versión 1, seguí [`docs/MIGRACION.md`](docs/MIGRACIO
 ## Despliegue
 
 Guía completa en [`docs/DEPLOY.md`](docs/DEPLOY.md): Streamlit Community Cloud
-(con Secrets) y VPS/Docker con `systemd` y backups.
+(con Secrets), landing gratis en GitHub Pages, comparación de hosts gratuitos
+(Hugging Face Spaces, Render, Cloud Run, VPS) y despliegue con Docker.
 
 ## Planes
 
@@ -228,8 +229,8 @@ python -m unittest discover -s tests -t .
 
 ## Limitaciones conocidas
 
-* La landing vive dentro de Streamlit (no tiene SEO). `web/landing.html` es la
-  versión estática para publicar en Netlify/GitHub Pages.
+* La landing vive dentro de Streamlit (no tiene SEO). `web/index.html` es la versión
+  estática para GitHub Pages (ver `docs/DEPLOY.md`, Opción C).
 * No hay recuperación de contraseña automática (no hay servidor de correo): se
   resuelve por soporte. El campo `codigo_recuperacion` está previsto para hacerlo
   sin email.

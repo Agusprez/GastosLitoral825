@@ -6,6 +6,7 @@ Streamlit o variables de entorno), para que el núcleo no dependa de Streamlit.
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass, replace
 from decimal import Decimal
@@ -130,6 +131,23 @@ def desde_entorno(entorno: Mapping[str, str] | None = None) -> dict[str, Any]:
     return datos
 
 
+def _json_o_texto(valor: Any) -> Any:
+    """Permite pasar la service account como JSON en una variable de entorno.
+
+    En hosts con contenedores (Render, Fly, Cloud Run) la forma más práctica de
+    cargar las credenciales es una variable `CUENTASCLARAS_GCP_CREDENCIALES` con
+    el JSON completo en una línea. Si viene el JSON, lo parseamos.
+    """
+    if isinstance(valor, str):
+        texto = valor.strip()
+        if texto.startswith("{"):
+            try:
+                return json.loads(texto)
+            except ValueError:
+                return None
+    return valor
+
+
 def _ajuste(combinado: Mapping[str, Any], nombre: str) -> Any:
     """Busca un ajuste en el nivel superior y, si no está, dentro de las secciones.
 
@@ -165,7 +183,9 @@ def armar(datos: Mapping[str, Any] | None = None) -> Config:
         sqlite_ruta=_texto(ajuste("sqlite_ruta"), Config.sqlite_ruta),
         hoja_url=_texto(ajuste("hoja_url") or ajuste("sheet_url_gastos")),
         prefijo_hojas=_texto(ajuste("prefijo_hojas"), Config.prefijo_hojas).lower(),
-        gcp_credenciales=combinado.get("gcp_credenciales") or combinado.get("gcp_service_account"),
+        gcp_credenciales=_json_o_texto(
+            combinado.get("gcp_credenciales") or combinado.get("gcp_service_account")
+        ),
         medios_dir=_texto(ajuste("medios_dir"), Config.medios_dir),
         drive_carpeta_id=_texto(ajuste("drive_carpeta_id")),
         imgbb_api_key=_texto(
