@@ -177,6 +177,22 @@ def formatear(valor, simbolo: str = "$") -> str:
     return f"{signo}{simbolo}{cuerpo}" if simbolo else f"{signo}{cuerpo}"
 
 
+def escapar_markdown(texto: str) -> str:
+    """Escapa los `$` para que Streamlit no los tome como fórmula LaTeX.
+
+    Streamlit renderiza `$...$` como matemática (KaTeX): un texto con dos montos,
+    como "Pagó $130.643,00 · le corresponde $65.321,50", mostraba todo lo del medio
+    en cursiva con tipografía de fórmula. Hasta que se actualice a una versión que
+    lo resuelve, se escapa con `\\$`.
+    """
+    return str(texto).replace("$", "\\$")
+
+
+def formatear_md(valor, simbolo: str = "$") -> str:
+    """Como `formatear`, pero seguro para `st.markdown` / `st.caption`."""
+    return escapar_markdown(formatear(valor, simbolo))
+
+
 def formatear_corto(valor, simbolo: str = "$") -> str:
     """Sin decimales cuando el monto es redondo: `$12.000` / `$12.345,60`."""
     numero = redondear(valor)

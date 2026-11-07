@@ -28,7 +28,13 @@ from cuentasclaras.modelos import cifrado as cifrado_mod
 from cuentasclaras.modelos import planes
 from cuentasclaras.modelos.almacen import ErrorAlmacen, Store
 from cuentasclaras.modelos.configuracion import Config, armar
-from cuentasclaras.modelos.dinero import formatear, formatear_corto, hoy, nombre_mes
+from cuentasclaras.modelos.dinero import (
+    formatear,
+    formatear_corto,
+    formatear_md,
+    hoy,
+    nombre_mes,
+)
 from cuentasclaras.modelos.fabrica import abrir_almacen
 from cuentasclaras.modelos.repositorio import Repositorio
 
@@ -107,6 +113,10 @@ class Contexto:
 
     def dinero(self, valor: Any) -> str:
         return formatear(valor, self.config.simbolo)
+
+    def dinero_md(self, valor: Any) -> str:
+        """Monto listo para Markdown (con el `$` escapado, sin LaTeX)."""
+        return formatear_md(valor, self.config.simbolo)
 
     def dinero_corto(self, valor: Any) -> str:
         return formatear_corto(valor, self.config.simbolo)

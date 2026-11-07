@@ -118,8 +118,8 @@ def _balance(ctx: Contexto, datos: dict) -> None:
             texto, ayuda = ctx.dinero(0), "al día"
         columna.metric(nombres.get(usuario_id, "—"), texto, help=ayuda)
         columna.caption(
-            f"Puso {ctx.dinero(valores['pagado'])} · "
-            f"le tocó {ctx.dinero(valores['parte'])}"
+            f"Pagó {ctx.dinero_md(valores['pagado'])} · "
+            f"le corresponde {ctx.dinero_md(valores['parte'])}"
         )
 
     transferencias = datos["transferencias"]
@@ -127,7 +127,7 @@ def _balance(ctx: Contexto, datos: dict) -> None:
         for transferencia in transferencias:
             st.info(
                 f"💸 **{transferencia['de_nombre']}** le transfiere "
-                f"**{ctx.dinero(transferencia['monto'])}** a "
+                f"**{ctx.dinero_md(transferencia['monto'])}** a "
                 f"**{transferencia['a_nombre']}**"
             )
         _registrar_pago(ctx, datos)
@@ -184,7 +184,7 @@ def _grafico(ctx: Contexto, datos: dict) -> None:
     if plt is None:
         total = float(datos["total"]) or 1.0
         for categoria, monto in categorias.items():
-            st.markdown(f"**{categoria}** · {ctx.dinero(monto)}")
+            st.markdown(f"**{categoria}** · {ctx.dinero_md(monto)}")
             st.progress(min(float(monto) / total, 1.0))
         return
 
@@ -276,7 +276,7 @@ def render(ctx: Contexto) -> None:
             for categoria, monto in datos["por_categoria"].items():
                 porcentaje = float(monto) / total * 100
                 st.markdown(
-                    f"**{categoria}** · {ctx.dinero(monto)} "
+                    f"**{categoria}** · {ctx.dinero_md(monto)} "
                     f"<span class='cc-nota'>({porcentaje:.0f}%)</span>",
                     unsafe_allow_html=True,
                 )

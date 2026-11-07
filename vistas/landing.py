@@ -10,7 +10,7 @@ from __future__ import annotations
 import streamlit as st
 
 from cuentasclaras.modelos import planes
-from cuentasclaras.modelos.dinero import formatear
+from cuentasclaras.modelos.dinero import escapar_markdown
 
 from .componentes import Contexto, css, entrar, pie
 
@@ -45,11 +45,14 @@ def _informacion(ctx: Contexto) -> None:
     st.markdown("#### Planes")
     gratis = planes.LIMITES[planes.GRATIS]
     pro = planes.LIMITES[planes.PRO]
+    mensual = ctx.dinero_md(ctx.config.precio_mensual_num)
+    anual = ctx.dinero_md(ctx.config.precio_anual_num)
+    gratis_txt = escapar_markdown(f"{ctx.config.simbolo}0")
     st.markdown(
         f"""
 | | Gratis | Pro |
 | --- | --- | --- |
-| Precio | $0 | {formatear(ctx.config.precio_mensual_num, ctx.config.simbolo)}/mes o {formatear(ctx.config.precio_anual_num, ctx.config.simbolo)}/año |
+| Precio | {gratis_txt} | {mensual}/mes o {anual}/año |
 | Hogares | {gratis['hogares']} | {pro['hogares']} |
 | Personas por hogar | {gratis['miembros']} | {pro['miembros']} |
 | Gastos por mes | {gratis['gastos_mes']} | Ilimitados |

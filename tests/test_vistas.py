@@ -92,6 +92,16 @@ class BaseVistas(unittest.TestCase):
             if any(marca in mensaje for marca in MARCAS_DE_FALLA)
         ]
 
+    def dolares_peligrosos(self) -> list[str]:
+        """Textos con 2+ `$` sin escapar: Streamlit los renderiza como LaTeX."""
+        problemas = []
+        for widget in ("markdown", "caption", "info", "warning", "success"):
+            for args, _ in streamlit_falso.llamadas(widget):
+                texto = str(args[0]) if args else ""
+                if texto.replace("\\$", "").count("$") >= 2:
+                    problemas.append(f"{widget}: {texto[:90]}")
+        return problemas
+
 
 class TestLanding(BaseVistas):
     def test_landing_solo_tiene_acceso(self):
@@ -125,6 +135,8 @@ class TestLandingInfoModal(BaseVistas):
         for seccion in ("Qué resuelve", "Cómo funciona", "Preguntas", "Gratis"):
             self.assertIn(seccion, textos)
         self.assertEqual(self.fallos(), [])
+        # Los precios de la tabla no deben quedar como fórmula matemática.
+        self.assertEqual(self.dolares_peligrosos(), [])
 
 
 class TestOnboarding(BaseVistas):
@@ -140,6 +152,14 @@ class TestVistasApp(BaseVistas):
     def test_inicio(self):
         self.correr(inicio.render, self.ctx)
         self.assertEqual(self.fallos(), [])
+        self.assertEqual(self.dolares_peligrosos(), [])
+
+    def test_inicio_muestra_pagado_y_correspondiente(self):
+        self.correr(inicio.render, self.ctx)
+        textos = " ".join(str(args[0]) for (args, _) in streamlit_falso.llamadas("caption"))
+        self.assertIn("Pagó", textos)
+        self.assertIn("le corresponde", textos)
+        self.assertNotIn("le tocó", textos)
 
     def test_gastos(self):
         self.correr(gastos.render, self.ctx)

@@ -53,6 +53,15 @@ class TestDinero(unittest.TestCase):
         self.assertEqual(dinero.decimal("10.005"), Decimal("10005"))
         self.assertEqual(dinero.decimal("1.234.567,89"), Decimal("1234567.89"))
 
+    def test_escapado_para_markdown(self):
+        """Dos `$` en un texto hacen que Streamlit lo renderice como LaTeX."""
+        self.assertEqual(dinero.formatear_md(1234.5), "\\$1.234,50")
+        self.assertEqual(dinero.formatear_md(0, "US$"), "US\\$0,00")
+        self.assertEqual(dinero.escapar_markdown("Pagó $1 y $2"), "Pagó \\$1 y \\$2")
+        # El texto escapado no debería tener pares de `$` sin escapar.
+        texto = f"{dinero.formatear_md(130643)} · {dinero.formatear_md(65321.5)}"
+        self.assertEqual(texto.replace("\\$", "").count("$"), 0)
+
     def test_fechas(self):
         self.assertEqual(dinero.parsear_fecha("31/12/2025").isoformat(), "2025-12-31")
         self.assertEqual(dinero.parsear_fecha("2025-01-09").isoformat(), "2025-01-09")
