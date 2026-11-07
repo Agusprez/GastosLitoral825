@@ -54,19 +54,44 @@ def _extension(nombre: str) -> str:
     return Path(nombre or "").suffix.lower()
 
 
+# Una foto de celular puede pesar 3-8 MB antes de comprimir: se acepta más en la
+# entrada y el límite de `max_comprobante_mb` se aplica al archivo ya optimizado.
+FACTOR_ENTRADA = 4
+MAX_ENTRADA_MB = 40
+
+
 def validar(datos: bytes, nombre: str, max_mb: int = 5) -> str:
-    """Devuelve la extensión normalizada o lanza `ErrorArchivo`."""
+    """Devuelve la extensión normalizada o lanza `ErrorArchivo`.
+
+    `max_mb` es el límite del archivo *guardado*; la entrada tolera más porque se
+    recomprime antes (una foto de celular ronda los 5 MB y no queremos rechazarla).
+    """
     if not datos:
         raise ErrorArchivo("El archivo está vacío.")
-    limite = max(1, int(max_mb)) * 1024 * 1024
-    if len(datos) > limite:
-        raise ErrorArchivo(f"El archivo supera los {max_mb} MB.")
+    limite_entrada = min(MAX_ENTRADA_MB, max(1, int(max_mb)) * FACTOR_ENTRADA) * 1024 * 1024
+    if len(datos) > limite_entrada:
+        raise ErrorArchivo(
+            f"La imagen es muy grande ({len(datos) / 1024 / 1024:.1f} MB). "
+            f"Probá con una foto más chica o subila desde el archivo."
+        )
     ext = _extension(nombre)
     if ext not in EXTENSIONES:
         raise ErrorArchivo("Formato no admitido. Usá JPG, PNG o WEBP.")
     if not any(datos.startswith(firma) for firma, _ in FIRMAS):
         raise ErrorArchivo("El archivo no parece una imagen válida.")
     return ".jpg" if ext == ".jpeg" else ext
+
+
+def comprimir(datos: bytes, nombre: str, max_mb: int = 5) -> tuple[bytes, str]:
+    """Valida, optimiza y controla el tamaño final. Devuelve (bytes, mime)."""
+    ext = validar(datos, nombre, max_mb)
+    contenido, mime = optimizar(datos, ext)
+    limite = max(1, int(max_mb)) * 1024 * 1024
+    if len(contenido) > limite:
+        raise ErrorArchivo(
+            f"La imagen sigue superando los {max_mb} MB después de comprimirla."
+        )
+    return contenido, mime
 
 
 def optimizar(datos: bytes, ext: str) -> tuple[bytes, str]:
@@ -110,8 +135,9 @@ class Medios:
 
 
 class MediosLocal(Medios):
-    def __init__(self, carpeta: str | Path) -> None:
+    def __init__(self, carpeta: str | Path, max_mb: int = 5) -> None:
         self.carpeta = Path(carpeta)
+        self.max_mb = max_mb
         self.carpeta.mkdir(parents=True, exist_ok=True)
 
     def _ruta(self, ref: str) -> Path:
@@ -124,8 +150,7 @@ class MediosLocal(Medios):
         return destino
 
     def guardar(self, hogar_id: str, datos: bytes, nombre: str) -> str:
-        ext = validar(datos, nombre)
-        contenido, _ = optimizar(datos, ext)
+        contenido, _mime = comprimir(datos, nombre, self.max_mb)
         carpeta_hogar = self.carpeta / re.sub(r"[^A-Za-z0-9_-]", "", hogar_id)
         carpeta_hogar.mkdir(parents=True, exist_ok=True)
         archivo = f"{uuid.uuid4().hex}.jpg"
@@ -153,7 +178,12 @@ class MediosLocal(Medios):
 
 
 class MediosDrive(Medios):
-    def __init__(self, credenciales: Mapping[str, Any], carpeta_id: str) -> None:
+    def __init__(
+        self,
+        credenciales: Mapping[str, Any],
+        carpeta_id: str,
+        max_mb: int = 5,
+    ) -> None:
         try:
             from google.oauth2.service_account import Credentials
             from googleapiclient.discovery import build
@@ -165,12 +195,12 @@ class MediosDrive(Medios):
         creds = Credentials.from_service_account_info(dict(credenciales), scopes=scopes)
         self._servicio = build("drive", "v3", credentials=creds, cache_discovery=False)
         self.carpeta_id = carpeta_id
+        self.max_mb = max_mb
 
     def guardar(self, hogar_id: str, datos: bytes, nombre: str) -> str:
         from googleapiclient.http import MediaIoBaseUpload
 
-        ext = validar(datos, nombre)
-        contenido, mime = optimizar(datos, ext)
+        contenido, mime = comprimir(datos, nombre, self.max_mb)
         metadatos = {
             "name": f"{hogar_id[:8]}-{uuid.uuid4().hex[:10]}.jpg",
             "parents": [self.carpeta_id] if self.carpeta_id else [],
@@ -247,7 +277,13 @@ class MediosImgbb(Medios):
 
     URL_SUBIDA = "https://api.imgbb.com/1/upload"
 
-    def __init__(self, clave: str, cliente: Any | None = None, timeout: int = 25) -> None:
+    def __init__(
+        self,
+        clave: str,
+        cliente: Any | None = None,
+        timeout: int = 25,
+        max_mb: int = 5,
+    ) -> None:
         clave = (clave or "").strip()
         if not clave:
             raise ErrorArchivo(
@@ -257,6 +293,7 @@ class MediosImgbb(Medios):
         self.clave = clave
         self._cliente = cliente
         self.timeout = timeout
+        self.max_mb = max_mb
 
     # --- infraestructura ---------------------------------------------------- #
     def _http(self):
@@ -272,8 +309,7 @@ class MediosImgbb(Medios):
 
     # --- interfaz ----------------------------------------------------------- #
     def guardar(self, hogar_id: str, datos: bytes, nombre: str) -> str:
-        ext = validar(datos, nombre)
-        contenido, _mime = optimizar(datos, ext)
+        contenido, _mime = comprimir(datos, nombre, self.max_mb)
         carga = {
             "key": self.clave,
             "image": base64.b64encode(contenido).decode("ascii"),
@@ -318,11 +354,12 @@ class MediosImgbb(Medios):
 
 
 def construir(config: Config) -> Medios:
+    tope = getattr(config, "max_comprobante_mb", 10)
     if config.medios == "imgbb":
-        return MediosImgbb(config.imgbb_api_key)
+        return MediosImgbb(config.imgbb_api_key, max_mb=tope)
     if config.medios == "drive" and config.gcp_credenciales and config.drive_carpeta_id:
-        return MediosDrive(config.gcp_credenciales, config.drive_carpeta_id)
-    return MediosLocal(config.medios_dir)
+        return MediosDrive(config.gcp_credenciales, config.drive_carpeta_id, max_mb=tope)
+    return MediosLocal(config.medios_dir, max_mb=tope)
 
 
 def mime_de(ref: str, datos: bytes | None = None) -> str:

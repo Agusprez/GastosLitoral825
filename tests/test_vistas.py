@@ -7,6 +7,7 @@ acción que explotan con datos reales.
 
 from __future__ import annotations
 
+import base64
 import tempfile
 import unittest
 from pathlib import Path
@@ -33,6 +34,12 @@ MARCAS_DE_FALLA = (
     "No tenés permiso",
     "error inesperado",
     "Traceback",
+)
+
+JPEG = base64.b64decode(
+    "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a"
+    "HBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAA"
+    "AAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q=="
 )
 
 
@@ -563,6 +570,58 @@ class TestImportarDesdeArchivo(BaseVistas):
         self.correr(hogar.render, self.ctx)
         errores = " ".join(str(args[0]) for (args, _) in streamlit_falso.llamadas("error"))
         self.assertIn("No pude leer el archivo", errores)
+
+
+class TestCamaraDelTicket(BaseVistas):
+    """Desde el celular se puede sacar la foto en el momento."""
+
+    class _Foto:
+        name = "camera_input.jpg"
+
+        def __init__(self, datos: bytes) -> None:
+            self._datos = datos
+
+        def getvalue(self) -> bytes:
+            return self._datos
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.foto = self._Foto(JPEG)
+
+    def test_ofrece_sacar_foto(self):
+        self.correr(gastos.render, self.ctx)
+        opciones = " ".join(
+            str(k.get("options")) for (_, k) in streamlit_falso.llamadas("radio")
+        )
+        self.assertIn("Sacar foto", opciones)
+
+    def test_con_camara_elegida_abre_el_widget(self):
+        streamlit_falso.ESTADO["cc_fuente_ticket"] = "📷 Sacar foto"
+        streamlit_falso.ARCHIVO_SUBIDO = self.foto
+        self.correr(gastos.render, self.ctx)
+        self.assertTrue(streamlit_falso.llamadas("camera_input"))
+        self.assertFalse(
+            [c for c in streamlit_falso.llamadas("file_uploader") if c[1][0] == "Comprobante"]
+        )
+
+    def test_con_archivo_elegido_no_abre_la_camara(self):
+        streamlit_falso.ESTADO["cc_fuente_ticket"] = "🖼️ Subir archivo"
+        streamlit_falso.ARCHIVO_SUBIDO = self.foto
+        self.correr(gastos.render, self.ctx)
+        self.assertFalse(streamlit_falso.llamadas("camera_input"))
+
+    def test_guarda_el_gasto_con_la_foto_de_la_camara(self):
+        # Sin nombre de archivo útil: el formato se valida por la firma.
+        self.foto.name = ""
+        subido = gastos._archivo_subido(self.foto)
+        self.assertEqual(subido[0], "foto.jpg")
+        resultado = self.ctx.gastos().agregar(
+            "Ticket con cámara", "1500", "Supermercado",
+            self.usuario["id"], [self.usuario["id"]], archivo=subido,
+        )
+        self.assertTrue(resultado.ok, resultado.mensaje)
+        comprobante = self.ctx.gastos().comprobante(resultado.datos["id"])
+        self.assertTrue(comprobante.datos["bytes"])
 
 
 class TestEspacioHuggingFace(unittest.TestCase):

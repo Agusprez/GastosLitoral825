@@ -90,7 +90,8 @@ class Config:
     medios_dir: str = "data/comprobantes"
     drive_carpeta_id: str = ""
     imgbb_api_key: str = ""
-    max_comprobante_mb: int = 5
+    # Tope del comprobante ya comprimido (la entrada tolera hasta 4x y se recomprime).
+    max_comprobante_mb: int = 10
 
     # Cifrado en reposo de todo lo que se guarda (planilla o SQLite).
     cifrado: bool = True

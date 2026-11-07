@@ -269,12 +269,28 @@ def radio(
     format_func: Any = None,
     key: str | None = None,
     label_visibility: str = "visible",
+    horizontal: bool = False,
+    help: str | None = None,
 ) -> Any:
     opciones = list(options)
-    _registrar("radio", (label,), {"key": key})
+    _registrar("radio", (label,), {"key": key, "options": opciones})
     if not opciones:
         return None
+    # Si el test fijó una opción en el estado, se respeta (como haría el navegador).
+    elegida = ESTADO.get(key) if key else None
+    if elegida is not None:
+        return elegida
     return opciones[index if 0 <= index < len(opciones) else 0]
+
+
+def camera_input(
+    label: str = "",
+    help: str | None = None,
+    key: str | None = None,
+    **kwargs: Any,
+) -> Any:
+    _registrar("camera_input", (label,), {"key": key})
+    return ARCHIVO_SUBIDO
 
 
 def selectbox(
@@ -359,7 +375,14 @@ def date_input(
     return value
 
 
-def file_uploader(label: str = "", type: Any = None, accept_multiple_files: bool = False, key: str | None = None) -> Any:
+def file_uploader(
+    label: str = "",
+    type: Any = None,
+    accept_multiple_files: bool = False,
+    key: str | None = None,
+    help: str | None = None,
+    **kwargs: Any,
+) -> Any:
     _registrar("file_uploader", (label,), {"key": key})
     return ARCHIVO_SUBIDO
 

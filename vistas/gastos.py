@@ -21,9 +21,17 @@ CATEGORIAS = (
 # Alta
 # --------------------------------------------------------------------------- #
 def _archivo_subido(subido: Any) -> tuple[str, bytes] | None:
+    """Convierte lo que devuelve el uploader o la cámara en `(nombre, bytes)`.
+
+    `st.camera_input` puede devolver un archivo sin nombre útil; el formato real se
+    valida por la firma del archivo, así que un nombre genérico alcanza.
+    """
     if subido is None:
         return None
-    return (subido.name, subido.getvalue())
+    nombre = str(getattr(subido, "name", "") or "")
+    if not nombre.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+        nombre = "foto.jpg"
+    return (nombre, subido.getvalue())
 
 
 def _formulario(ctx: Contexto, miembros: list[dict[str, Any]]) -> None:
@@ -32,6 +40,17 @@ def _formulario(ctx: Contexto, miembros: list[dict[str, Any]]) -> None:
     yo = ctx.usuario["id"]
 
     st.markdown("### Registrar un gasto")
+
+    # El selector va fuera del formulario: cambiarlo tiene que redibujar el widget
+    # de la foto (dentro del form no habría rerun hasta apretar "Guardar").
+    fuente = st.radio(
+        "Comprobante",
+        ["📷 Sacar foto", "🖼️ Subir archivo", "Sin comprobante"],
+        horizontal=True,
+        key="cc_fuente_ticket",
+        label_visibility="collapsed",
+    )
+
     with st.form("nuevo_gasto", clear_on_submit=True):
         col1, col2 = st.columns(2)
         fecha = col1.date_input("Fecha", value=hoy(), max_value=hoy(), format="DD/MM/YYYY")
@@ -55,9 +74,21 @@ def _formulario(ctx: Contexto, miembros: list[dict[str, Any]]) -> None:
             format_func=lambda i: nombres[i],
             help="Si pagaste algo sólo para otra persona, dejá únicamente a esa persona.",
         )
-        subido = st.file_uploader(
-            "Comprobante (opcional)", type=["jpg", "jpeg", "png", "webp"]
-        )
+        subido = None
+        if fuente == "📷 Sacar foto":
+            subido = st.camera_input(
+                "Foto del ticket",
+                help="Se abre la cámara del celular. También podés elegir una foto "
+                "guardada desde el selector de archivos.",
+                key="cc_foto_ticket",
+            )
+        elif fuente == "🖼️ Subir archivo":
+            subido = st.file_uploader(
+                "Comprobante",
+                type=["jpg", "jpeg", "png", "webp"],
+                key="cc_archivo_ticket",
+                help="En el celular, el selector también ofrece la cámara.",
+            )
         if ctx.aviso_medios:
             st.warning(ctx.aviso_medios)
         enviado = st.form_submit_button(

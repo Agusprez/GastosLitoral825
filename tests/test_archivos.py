@@ -179,5 +179,31 @@ class TestDisco(unittest.TestCase):
             self.assertIsNone(medios.leer(referencia))
 
 
+class TestTamanoDeFoto(unittest.TestCase):
+    """Las fotos de celular pesan varios MB: se aceptan y se comprimen."""
+
+    def test_acepta_foto_grande_y_la_comprime(self):
+        grande = JPEG + b"\x00" * (6 * 1024 * 1024)  # ~6 MB
+        contenido, mime = archivos.comprimir(grande, "foto.jpg", 10)
+        self.assertEqual(mime, "image/jpeg")
+        self.assertLess(len(contenido), len(grande))
+
+    def test_rechaza_entradas_enormes(self):
+        enorme = JPEG + b"\x00" * (6 * 1024 * 1024)
+        with self.assertRaises(archivos.ErrorArchivo) as contexto:
+            archivos.comprimir(enorme, "foto.jpg", 1)  # tope 1 MB → entrada 4 MB
+        self.assertIn("grande", str(contexto.exception))
+
+    def test_limite_final_del_archivo(self):
+        """Si después de comprimir no baja del tope, se avisa."""
+        original = archivos.optimizar
+        archivos.optimizar = lambda datos, ext: (datos, "image/jpeg")
+        try:
+            with self.assertRaises(archivos.ErrorArchivo):
+                archivos.comprimir(JPEG + b"\x00" * (3 * 1024 * 1024), "foto.jpg", 1)
+        finally:
+            archivos.optimizar = original
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
