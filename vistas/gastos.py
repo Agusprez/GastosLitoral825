@@ -43,9 +43,12 @@ def _formulario(ctx: Contexto, miembros: list[dict[str, Any]]) -> None:
 
     # El selector va fuera del formulario: cambiarlo tiene que redibujar el widget
     # de la foto (dentro del form no habría rerun hasta apretar "Guardar").
+    opciones_ticket = ["📷 Abrir la cámara", "🖼️ Elegir de la galería", "Sin comprobante"]
+    if st.session_state.get("cc_fuente_ticket") not in opciones_ticket:
+        st.session_state.pop("cc_fuente_ticket", None)  # valor viejo de otra versión
     fuente = st.radio(
         "Comprobante",
-        ["📷 Sacar foto", "🖼️ Subir archivo", "Sin comprobante"],
+        opciones_ticket,
         horizontal=True,
         key="cc_fuente_ticket",
         label_visibility="collapsed",
@@ -74,20 +77,23 @@ def _formulario(ctx: Contexto, miembros: list[dict[str, Any]]) -> None:
             format_func=lambda i: nombres[i],
             help="Si pagaste algo sólo para otra persona, dejá únicamente a esa persona.",
         )
-        subido = None
-        if fuente == "📷 Sacar foto":
-            subido = st.camera_input(
-                "Foto del ticket",
-                help="Se abre la cámara del celular. También podés elegir una foto "
-                "guardada desde el selector de archivos.",
-                key="cc_foto_ticket",
-            )
-        elif fuente == "🖼️ Subir archivo":
-            subido = st.file_uploader(
-                "Comprobante",
+
+        foto_camara = None
+        foto_galeria = None
+        if fuente != "Sin comprobante":
+            if fuente == "📷 Abrir la cámara":
+                foto_camara = st.camera_input(
+                    "Sacar la foto del ticket",
+                    help="Se abre la cámara del navegador sobre esta misma pantalla. "
+                    "Si el celular no la habilita (permiso o navegador interno de "
+                    "WhatsApp), usá el selector de abajo.",
+                    key="cc_foto_ticket",
+                )
+            foto_galeria = st.file_uploader(
+                "…o elegí una foto guardada",
                 type=["jpg", "jpeg", "png", "webp"],
                 key="cc_archivo_ticket",
-                help="En el celular, el selector también ofrece la cámara.",
+                help="Abre la galería (o la cámara nativa, según el celular).",
             )
         if ctx.aviso_medios:
             st.warning(ctx.aviso_medios)
@@ -97,6 +103,8 @@ def _formulario(ctx: Contexto, miembros: list[dict[str, Any]]) -> None:
 
     if not enviado:
         return
+    # Si hay foto de la cámara y además un archivo, gana la cámara.
+    subido = foto_camara or foto_galeria
     ejecutar(
         lambda: ctx.gastos().agregar(
             concepto,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from cuentasclaras import BUILD, __version__
 from cuentasclaras.modelos import planes
 
 from .componentes import Contexto, cambiar_hogar, pill, salir
@@ -90,5 +91,7 @@ def render(ctx: Contexto, paginas: dict[str, str]) -> str:
             if st.button("Ver planes", use_container_width=True, key="btn_planes_sidebar"):
                 st.session_state["cc_ir_a"] = "💳 Plan"
                 st.rerun()
+
+        st.caption(f"v{__version__} · {BUILD}")
 
     return elegida

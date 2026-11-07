@@ -10,4 +10,8 @@ El paquete no importa Streamlit: se puede usar desde scripts, tests o una API si
 arrastrar la interfaz.
 """
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
+
+# Se muestra en la barra lateral para saber de un vistazo qué versión está
+# desplegada (Streamlit Cloud a veces tarda en reiniciar tras un push).
+BUILD = "2026-11-07 · cámara"

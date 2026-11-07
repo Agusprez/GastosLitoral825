@@ -593,22 +593,28 @@ class TestCamaraDelTicket(BaseVistas):
         opciones = " ".join(
             str(k.get("options")) for (_, k) in streamlit_falso.llamadas("radio")
         )
-        self.assertIn("Sacar foto", opciones)
+        self.assertIn("Abrir la cámara", opciones)
 
-    def test_con_camara_elegida_abre_el_widget(self):
-        streamlit_falso.ESTADO["cc_fuente_ticket"] = "📷 Sacar foto"
+    def test_con_camara_elegida_abre_el_widget_y_la_galeria(self):
+        streamlit_falso.ESTADO["cc_fuente_ticket"] = "📷 Abrir la cámara"
         streamlit_falso.ARCHIVO_SUBIDO = self.foto
         self.correr(gastos.render, self.ctx)
         self.assertTrue(streamlit_falso.llamadas("camera_input"))
-        self.assertFalse(
-            [c for c in streamlit_falso.llamadas("file_uploader") if c[1][0] == "Comprobante"]
-        )
+        # La galería sigue disponible como alternativa.
+        etiquetas = " ".join(str(a[0]) for (a, _) in streamlit_falso.llamadas("file_uploader"))
+        self.assertIn("elegí una foto guardada", etiquetas)
 
-    def test_con_archivo_elegido_no_abre_la_camara(self):
-        streamlit_falso.ESTADO["cc_fuente_ticket"] = "🖼️ Subir archivo"
-        streamlit_falso.ARCHIVO_SUBIDO = self.foto
+    def test_sin_comprobante_no_muestra_widgets(self):
+        streamlit_falso.ESTADO["cc_fuente_ticket"] = "Sin comprobante"
         self.correr(gastos.render, self.ctx)
         self.assertFalse(streamlit_falso.llamadas("camera_input"))
+        self.assertFalse(streamlit_falso.llamadas("file_uploader"))
+
+    def test_valor_viejo_del_selector_no_rompe(self):
+        streamlit_falso.ESTADO["cc_fuente_ticket"] = "📷 Sacar foto"  # versión anterior
+        self.correr(gastos.render, self.ctx)
+        self.assertEqual(self.fallos(), [])
+        self.assertNotIn("cc_fuente_ticket", streamlit_falso.ESTADO)
 
     def test_guarda_el_gasto_con_la_foto_de_la_camara(self):
         # Sin nombre de archivo útil: el formato se valida por la firma.
