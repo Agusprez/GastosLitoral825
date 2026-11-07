@@ -98,6 +98,7 @@ def falso_config(**kwargs: Any) -> None:
     ESTADO.clear()
     SECRETOS.clear()
     SESION_COOKIES.clear()
+    COOKIE_LLAMADAS.clear()
     PEDIDOS.clear()
 
 
@@ -462,18 +463,25 @@ def sidebar() -> _BarraLateral:  # pragma: no cover - se reemplaza abajo
 
 
 # Fake de los componentes de cookies --------------------------------------------- #
+COOKIE_LLAMADAS: list[tuple[str, str, str]] = []
+
+
 class _CookieController:
+    """Imita al componente: `set`/`remove` se aplican al "navegador" (SESION_COOKIES)."""
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         pass
 
     def get(self, clave: str) -> str | None:
         return SESION_COOKIES.get(clave)
 
-    def set(self, clave: str, valor: str) -> None:
+    def set(self, clave: str, valor: str, **opciones: Any) -> None:
         SESION_COOKIES[clave] = valor
+        COOKIE_LLAMADAS.append(("set", clave, str(valor)))
 
     def remove(self, clave: str) -> None:
         SESION_COOKIES.pop(clave, None)
+        COOKIE_LLAMADAS.append(("remove", clave, ""))
 
     def getAll(self) -> dict[str, str]:  # noqa: N802 - API del paquete real
         return dict(SESION_COOKIES)

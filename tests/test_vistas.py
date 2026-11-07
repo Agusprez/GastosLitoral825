@@ -22,6 +22,7 @@ from cuentasclaras.modelos.archivos import MediosLocal  # noqa: E402
 from cuentasclaras.modelos.configuracion import armar  # noqa: E402
 from cuentasclaras.modelos.repositorio import Repositorio  # noqa: E402
 from vistas import admin, compras, cuenta, gastos, hogar, inicio, landing, navegacion  # noqa: E402
+from vistas import componentes  # noqa: E402
 from vistas import planes as vista_planes  # noqa: E402
 from vistas.componentes import Contexto, sin_hogar  # noqa: E402
 
@@ -334,6 +335,79 @@ class TestCodificacion(unittest.TestCase):
                     problemas.append(f"{ruta.relative_to(raiz)}: contiene {marca!r}")
                     break
         self.assertEqual(problemas, [])
+
+
+class TestCookieDeSesion(BaseVistas):
+    """El login tiene que sobrevivir a un F5 (cookie escrita en un run limpio)."""
+
+    def _token(self) -> str:
+        from cuentasclaras.modelos import autenticacion as auth
+
+        return auth.crear_sesion(self.store, self.usuario["id"])
+
+    def test_login_encola_la_cookie_y_la_escribe_despues(self):
+        token = self._token()
+        ctx = self._contexto(self.usuario, self.hogar)
+
+        with self.assertRaises(streamlit_falso.RerunStop):
+            componentes.entrar(ctx, {"usuario": self.usuario, "token": token})
+
+        # No se escribe en el mismo run: el rerun desmontaría el componente.
+        self.assertEqual(streamlit_falso.COOKIE_LLAMADAS, [])
+        self.assertEqual(streamlit_falso.ESTADO["cc_pendiente_cookie"], token)
+
+        # El run siguiente la escribe y limpia el pendiente.
+        componentes._aplicar_cookies_pendientes(ctx)
+        self.assertIn(
+            ("set", componentes.COOKIE, token), streamlit_falso.COOKIE_LLAMADAS
+        )
+        self.assertNotIn("cc_pendiente_cookie", streamlit_falso.ESTADO)
+        self.assertEqual(
+            streamlit_falso.SESION_COOKIES[componentes.COOKIE], token
+        )
+
+    def test_logout_encola_el_borrado(self):
+        token = self._token()
+        streamlit_falso.ESTADO["cc_usuario_id"] = self.usuario["id"]
+        streamlit_falso.ESTADO["cc_token"] = token
+        ctx = self._contexto(self.usuario, self.hogar)
+        ctx.token = token
+
+        with self.assertRaises(streamlit_falso.RerunStop):
+            componentes.salir(ctx)
+
+        self.assertTrue(streamlit_falso.ESTADO["cc_pendiente_borrar"])
+        self.assertNotIn("cc_usuario_id", streamlit_falso.ESTADO)
+
+        componentes._aplicar_cookies_pendientes(ctx)
+        self.assertIn(
+            ("remove", componentes.COOKIE, ""), streamlit_falso.COOKIE_LLAMADAS
+        )
+        self.assertNotIn(componentes.COOKIE, streamlit_falso.SESION_COOKIES)
+
+    def test_f5_restaura_la_sesion_desde_la_cookie(self):
+        token = self._token()
+        # Un F5 es una sesión nueva: session_state vacío, cookie presente.
+        streamlit_falso.SESION_COOKIES[componentes.COOKIE] = token
+        ctx = self._contexto(None, None)
+        ctx.ctrl = streamlit_falso._CookieController()
+
+        componentes._restaurar(ctx)
+
+        self.assertIsNotNone(ctx.usuario)
+        self.assertEqual(ctx.usuario["id"], self.usuario["id"])
+        self.assertEqual(ctx.token, token)
+
+    def test_cookie_vencida_no_loguea(self):
+        streamlit_falso.SESION_COOKIES[componentes.COOKIE] = "token-inventado"
+        ctx = self._contexto(None, None)
+        ctx.ctrl = streamlit_falso._CookieController()
+
+        componentes._restaurar(ctx)
+
+        self.assertIsNone(ctx.usuario)
+        # Además se borra la cookie rota.
+        self.assertNotIn(componentes.COOKIE, streamlit_falso.SESION_COOKIES)
 
 
 class TestEspacioHuggingFace(unittest.TestCase):

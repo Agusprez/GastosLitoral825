@@ -34,6 +34,13 @@ from cuentasclaras.modelos.repositorio import Repositorio
 
 COOKIE = "cc_sesion"
 COLOR = "#0f766e"
+# Días que dura la cookie del navegador (la sesión del servidor manda: si venció,
+# la app la rechaza igual).
+DIAS_COOKIE = 30
+# Operaciones de cookie que se aplican al inicio del run siguiente, nunca en el
+# mismo run en el que se dispara un st.rerun().
+PENDIENTE_COOKIE = "cc_pendiente_cookie"
+PENDIENTE_BORRAR = "cc_pendiente_borrar"
 
 
 # --------------------------------------------------------------------------- #
@@ -146,13 +153,29 @@ def _leer_cookie(ctrl, clave: str, intentos: int = 6) -> str:
     return ""
 
 
-def _guardar_cookie(ctrl, clave: str, valor: str) -> None:
+def _guardar_cookie(ctrl, clave: str, valor: str, dias: int = DIAS_COOKIE) -> None:
+    """Escribe la cookie en el navegador.
+
+    `streamlit-cookies-controller` lo hace con un componente: si se llama a `set()`
+    y enseguida `st.rerun()`, el iframe se desmonta antes de procesarlo y la cookie
+    no se guarda (por eso un F5 cerraba la sesión). Se llama siempre en un run
+    limpio, sin rerun inmediato después.
+    """
     if ctrl is None:
         return
     try:
-        ctrl.set(clave, valor)
+        # SameSite=lax: viaja también cuando se entra desde un link externo
+        # (WhatsApp, mail), que es el caso típico de una invitación.
+        ctrl.set(clave, valor, max_age=dias * 86400, same_site="lax")
+    except TypeError:  # versión sin esos parámetros
+        try:
+            ctrl.set(clave, valor)
+        except Exception:  # noqa: BLE001 - navegador sin cookies
+            pass
     except Exception:  # noqa: BLE001 - navegador sin cookies
         pass
+    # Un respiro para que el frontend alcance a escribir antes de terminar el run.
+    time.sleep(0.2)
 
 
 def _borrar_cookie(ctrl, clave: str) -> None:
@@ -162,6 +185,7 @@ def _borrar_cookie(ctrl, clave: str) -> None:
         ctrl.remove(clave)
     except Exception:  # noqa: BLE001
         pass
+    time.sleep(0.2)
 
 
 # --------------------------------------------------------------------------- #
@@ -220,9 +244,25 @@ def arrancar() -> Contexto:
         origen_clave=origen_clave,
         aviso_medios=aviso_medios,
     )
+    _aplicar_cookies_pendientes(ctx)
     _restaurar(ctx)
     _resolver_hogar(ctx)
     return ctx
+
+
+def _aplicar_cookies_pendientes(ctx: Contexto) -> None:
+    """Escribe o borra la cookie del navegador en un run sin rerun inmediato.
+
+    El login no guarda la cookie en el acto: deja el token en
+    `PENDIENTE_COOKIE` y redirige. Así la escritura ocurre al principio del run
+    siguiente, el componente alcanza a procesarla y el F5 conserva la sesión.
+    """
+    token = st.session_state.pop(PENDIENTE_COOKIE, None)
+    borrar = st.session_state.pop(PENDIENTE_BORRAR, False)
+    if borrar:
+        _borrar_cookie(ctx.ctrl, COOKIE)
+    elif token:
+        _guardar_cookie(ctx.ctrl, COOKIE, str(token))
 
 
 def _sembrar_demo(store: Store, config: Config, repo: Repositorio) -> None:
@@ -254,7 +294,11 @@ def _restaurar(ctx: Contexto) -> None:
         for clave in ("cc_usuario_id", "cc_token", "cc_hogar_id"):
             st.session_state.pop(clave, None)
 
-    token = _leer_cookie(ctx.ctrl, COOKIE)
+    # Sólo el primer intento de la sesión espera al componente; después se lee
+    # una vez para no demorar cada interacción de la pantalla de acceso.
+    primero = not st.session_state.get("cc_cookie_intentada")
+    st.session_state["cc_cookie_intentada"] = True
+    token = _leer_cookie(ctx.ctrl, COOKIE, intentos=6 if primero else 1)
     if not token:
         return
     resultado = ctx.sesion().restaurar(token)
@@ -286,13 +330,18 @@ def _resolver_hogar(ctx: Contexto) -> None:
 # Acciones de sesión
 # --------------------------------------------------------------------------- #
 def entrar(ctx: Contexto, datos: dict[str, Any]) -> None:
-    """Guarda la sesión creada por el controlador y recarga."""
+    """Deja la sesión lista y encarga la cookie para el run siguiente.
+
+    No escribe la cookie acá: el `st.rerun()` desmontaría el componente antes de
+    que la guarde. Se encola en `PENDIENTE_COOKIE` y la escribe `arrancar()` al
+    principio del próximo run (ver `_aplicar_cookies_pendientes`).
+    """
     usuario = datos["usuario"]
     token = datos["token"]
     st.session_state["cc_usuario_id"] = usuario["id"]
     st.session_state["cc_token"] = token
     st.session_state.pop("cc_hogar_id", None)
-    _guardar_cookie(ctx.ctrl, COOKIE, token)
+    st.session_state[PENDIENTE_COOKIE] = token
     st.rerun()
 
 
@@ -300,9 +349,11 @@ def salir(ctx: Contexto) -> None:
     token = st.session_state.get("cc_token") or _leer_cookie(ctx.ctrl, COOKIE, intentos=1)
     if token:
         ctx.sesion().cerrar(token)
-    _borrar_cookie(ctx.ctrl, COOKIE)
     for clave in ("cc_usuario_id", "cc_token", "cc_hogar_id", "cc_store", "cc_origen_clave"):
         st.session_state.pop(clave, None)
+    st.session_state.pop("cc_cookie_intentada", None)
+    # Igual que en el login: el borrado se aplica al inicio del próximo run.
+    st.session_state[PENDIENTE_BORRAR] = True
     st.rerun()
 
 
