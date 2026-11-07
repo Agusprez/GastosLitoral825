@@ -35,7 +35,7 @@ cifrados. Nació de una app familiar de dos usuarios atada a una planilla de Goo
 
 | Situación | Cómo queda |
 | --- | --- |
-| Compras del súper, servicios, salidas | Se cargan en segundos desde el celular, sacando la foto del ticket con la cámara. |
+| Compras del súper, servicios, salidas | Se cargan en segundos desde el celular, con la foto del ticket (cámara o galería, como en la v1). |
 | "Yo puse más que vos" | El sistema reparte cada gasto y muestra quién le debe a quién, con el monto exacto. |
 | Varias casas o familias | Cada hogar es independiente y una persona puede pertenecer a varios. |
 | Invitar a alguien | Código de 6 caracteres + mensaje listo para copiar y pegar en WhatsApp (o abrir WhatsApp con el texto cargado). |

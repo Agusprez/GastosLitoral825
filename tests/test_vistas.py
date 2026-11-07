@@ -572,11 +572,11 @@ class TestImportarDesdeArchivo(BaseVistas):
         self.assertIn("No pude leer el archivo", errores)
 
 
-class TestCamaraDelTicket(BaseVistas):
-    """Desde el celular se puede sacar la foto en el momento."""
+class TestComprobanteSimple(BaseVistas):
+    """Como en la v1: un solo botón; el sistema operativo ofrece cámara o archivo."""
 
     class _Foto:
-        name = "camera_input.jpg"
+        name = "ticket.jpg"
 
         def __init__(self, datos: bytes) -> None:
             self._datos = datos
@@ -584,64 +584,33 @@ class TestCamaraDelTicket(BaseVistas):
         def getvalue(self) -> bytes:
             return self._datos
 
-    def setUp(self) -> None:
-        super().setUp()
-        self.foto = self._Foto(JPEG)
-
-    def test_ofrece_sacar_foto(self):
+    def test_un_solo_control_de_comprobante(self):
         self.correr(gastos.render, self.ctx)
-        opciones = " ".join(
-            str(k.get("options")) for (_, k) in streamlit_falso.llamadas("radio")
+        etiquetas = " ".join(
+            str(a[0]) for (a, _) in streamlit_falso.llamadas("file_uploader")
         )
-        self.assertIn("Sacar foto", opciones)
-        self.assertIn("Elegir de la galería", opciones)
-
-    def test_camara_apagada_por_defecto(self):
-        """La cámara no se enciende sola al entrar a la pantalla."""
-        self.correr(gastos.render, self.ctx)
+        self.assertIn("Subir comprobante o ticket", etiquetas)
+        # Nada de cámara propia ni selector de fuente.
         self.assertFalse(streamlit_falso.llamadas("camera_input"))
-        etiquetas = " ".join(str(args[0]) for (args, _) in streamlit_falso.llamadas("button"))
-        self.assertIn("Abrir la cámara", etiquetas)
 
-    def test_camara_abierta_a_pedido(self):
+    def test_no_quedan_estados_viejos(self):
         streamlit_falso.ESTADO["cc_fuente_ticket"] = "📷 Sacar foto"
         streamlit_falso.ESTADO["cc_camara_abierta"] = True
         self.correr(gastos.render, self.ctx)
-        self.assertTrue(streamlit_falso.llamadas("camera_input"))
-        etiquetas = " ".join(str(args[0]) for (args, _) in streamlit_falso.llamadas("button"))
-        self.assertIn("Cerrar la cámara", etiquetas)
-
-    def test_cambiar_de_opcion_apaga_la_camara(self):
-        streamlit_falso.ESTADO["cc_fuente_ticket"] = "🖼️ Elegir de la galería"
-        streamlit_falso.ESTADO["cc_camara_abierta"] = True
-        self.correr(gastos.render, self.ctx)
-        self.assertFalse(streamlit_falso.ESTADO.get("cc_camara_abierta"))
-        self.assertFalse(streamlit_falso.llamadas("camera_input"))
-
-    def test_sin_comprobante_no_muestra_widgets(self):
-        streamlit_falso.ESTADO["cc_fuente_ticket"] = "Sin comprobante"
-        self.correr(gastos.render, self.ctx)
-        self.assertFalse(streamlit_falso.llamadas("camera_input"))
-        self.assertFalse(streamlit_falso.llamadas("file_uploader"))
-
-    def test_valor_viejo_del_selector_no_rompe(self):
-        streamlit_falso.ESTADO["cc_fuente_ticket"] = "📷 Abrir la cámara"  # versión anterior
-        self.correr(gastos.render, self.ctx)
-        self.assertEqual(self.fallos(), [])
         self.assertNotIn("cc_fuente_ticket", streamlit_falso.ESTADO)
+        self.assertNotIn("cc_camara_abierta", streamlit_falso.ESTADO)
 
-    def test_guarda_el_gasto_con_la_foto_de_la_camara(self):
-        # Sin nombre de archivo útil: el formato se valida por la firma.
-        self.foto.name = ""
-        subido = gastos._archivo_subido(self.foto)
-        self.assertEqual(subido[0], "foto.jpg")
+    def test_guarda_con_foto_sin_nombre(self):
+        subido = gastos._archivo_subido(self._Foto(JPEG))
+        self.assertEqual(subido[0], "ticket.jpg")
         resultado = self.ctx.gastos().agregar(
-            "Ticket con cámara", "1500", "Supermercado",
+            "Ticket del celular", "1500", "Supermercado",
             self.usuario["id"], [self.usuario["id"]], archivo=subido,
         )
         self.assertTrue(resultado.ok, resultado.mensaje)
         comprobante = self.ctx.gastos().comprobante(resultado.datos["id"])
         self.assertTrue(comprobante.datos["bytes"])
+
 
 
 class TestEspacioHuggingFace(unittest.TestCase):
