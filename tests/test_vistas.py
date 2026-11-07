@@ -321,10 +321,12 @@ class TestEspacioHuggingFace(unittest.TestCase):
             texto.startswith("---"), "el README debe empezar con la cabecera YAML"
         )
         cabecera = texto.split("---", 2)[1]
-        for clave in ("sdk: streamlit", "app_file: app.py", "sdk_version:"):
-            self.assertIn(clave, cabecera)
+        # HF ya no ofrece el SDK de Streamlit: el Space va con Docker.
+        self.assertIn("sdk: docker", cabecera)
+        self.assertIn("app_port: 8501", cabecera)
         self.assertTrue((raiz / "app.py").exists())
         self.assertTrue((raiz / "requirements.txt").exists())
+        self.assertTrue((raiz / "Dockerfile").exists())
 
 
 if __name__ == "__main__":

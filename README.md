@@ -3,9 +3,8 @@ title: Cuentas Claras
 emoji: 💸
 colorFrom: teal
 colorTo: green
-sdk: streamlit
-sdk_version: 1.37.0
-app_file: app.py
+sdk: docker
+app_port: 8501
 pinned: false
 short_description: Gastos compartidos del hogar, sin planillas
 ---
@@ -17,9 +16,10 @@ varias personas, varios hogares, planes, límites, comprobantes privados y datos
 cifrados. Nació de una app familiar de dos usuarios atada a una planilla de Google
 (ver [`legacy/`](legacy/)) y ahora es un producto multiusuario.
 
-> La cabecera YAML de arriba es la que necesita **Hugging Face Spaces** para
-> levantar el repo como app. En GitHub se muestra como una tabla chiquita; no
-> afecta nada. Pasos en [`docs/HUGGINGFACE.md`](docs/HUGGINGFACE.md).
+> La cabecera YAML de arriba es la que necesita **Hugging Face Spaces** para correr
+> el repo como app con el `Dockerfile` incluido (HF cobra eso: PRO, USD 9/mes; los
+> Spaces *Static* son los únicos gratis). En GitHub se ve como una tabla chiquita y
+> no afecta nada. Detalle y alternativas gratis en [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
 * **Base de datos:** Google Sheets (la misma planilla de siempre, en pestañas
   propias `cc_*`), o SQLite para desarrollo.

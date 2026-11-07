@@ -113,43 +113,33 @@ cambian seguido: confirmalos en la página del proveedor antes de decidir.
 
 | Servicio | Gratis | Se duerme | Memoria | Secretos | Cuándo conviene |
 | --- | --- | --- | --- | --- | --- |
-| **Streamlit Community Cloud** | Sí | Tras varias horas sin uso | ~1 GB | Secrets (TOML) | Es donde ya está. Cero configuración, pero sin SLA. |
-| **Hugging Face Spaces** (SDK Streamlit) | Sí | Tras ~48 h sin uso | 16 GB / 2 vCPU | *Settings → Secrets* | La mejor RAM gratis y el sueño más largo. Ideal para uso familiar. |
-| **Render** (free web service) | Sí | A los ~15 min sin tráfico | 512 MB | *Environment* | Fácil de conectar al repo; el arranque en frío tarda ~30-60 s. |
+| **Streamlit Community Cloud** | Sí | Tras varias horas sin uso | ~1 GB | Secrets (TOML) | Es donde ya está. Cero configuración, pero sin SLA. **La única opción gratis 100 % sin tarjeta para correr la app.** |
+| **Hugging Face Spaces** | Sólo *Static* | — | — | — | Desde 2026 los Spaces que ejecutan código (Gradio/Docker, y con ellos Streamlit) requieren **PRO, USD 9/mes** ([precios](https://huggingface.co/pricing)). Sirve gratis para la landing. |
+| **Render** (free web service) | Sí | A los ~15 min sin tráfico | 512 MB | *Environment* | Se conecta al repo; el arranque en frío tarda ~30-60 s. Confirmá el plan free en [su doc](https://render.com/docs/free). |
 | **Google Cloud Run** | Cupo mensual gratis (pide tarjeta) | Scale to zero | configurable | Secret Manager / env | Si ya usás Google Cloud y querés HTTPS propio. |
 | **Fly.io** | Cupo chico (pide tarjeta) | No | 256-512 MB | `fly secrets` | Control fino, regiones cercanas. |
-| **Oracle Cloud Always Free** | Sí (VM ARM) | No | hasta 24 GB | variables de entorno | "Siempre encendido" sin pagar, pero administrás el sistema operativo. |
+| **Oracle Cloud Always Free** | Sí (VM ARM, pide tarjeta) | No | hasta 24 GB | variables de entorno | "Siempre encendido" sin pagar, pero administrás el sistema operativo. |
 | **VPS chico** | No (~USD 4-5/mes) | No | 1 GB | archivo | Lo más predecible para vender el servicio. |
 
-**Recomendación:** para uso familiar gratis, Hugging Face Spaces o quedarse en
-Streamlit Cloud (con el sueño, que sólo agrega unos segundos al primer acceso). Para
-venderlo con SLA, un VPS o Cloud Run.
+**Recomendación:** si el objetivo es cero costo y cero tarjeta, **quedate en
+Streamlit Cloud** (ya funciona; el sueño sólo agrega unos segundos al primer
+acceso) y publicá la landing en GitHub Pages o en un Space *Static* de HF. Si te
+molesta el sueño, la salida gratis "de verdad" es una VM Oracle Always Free o un VPS
+de ~USD 4.
 
-### Receta: Hugging Face Spaces
+### Receta: Hugging Face Spaces (requiere PRO)
 
-1. `huggingface.co/new-space` → SDK **Streamlit** → visibilidad pública (los Spaces
-   privados free también duermen).
-2. Subí el repo (`app.py`, `cuentasclaras/`, `vistas/`, `requirements.txt`).
-   El `README.md` del Space necesita esta cabecera:
+Detalle completo en [`HUGGINGFACE.md`](HUGGINGFACE.md). Resumen: Space con SDK
+**Docker** (el repo trae `Dockerfile`), cabecera `sdk: docker` + `app_port: 8501`,
+secretos en *Settings → Variables and secrets* y `python tools/publicar_space.py`
+para copiar sólo lo necesario.
 
-   ```yaml
-   ---
-   title: Cuentas Claras
-   emoji: 💸
-   colorFrom: teal
-   colorTo: green
-   sdk: streamlit
-   sdk_version: 1.37.0
-   app_file: app.py
-   pinned: false
-   ---
-   ```
+### Receta: Hugging Face Space estático (gratis, para la landing)
 
-3. *Settings → Variables and secrets*: `CUENTASCLARAS_HOJA_URL`,
-   `CUENTASCLARAS_GCP_CREDENCIALES` (JSON en una línea),
-   `CUENTASCLARAS_CLAVE_CIFRADO`, `CUENTASCLARAS_IMGBB_API_KEY`,
-   `CUENTASCLARAS_ADMINS`.
-4. *Factory rebuild* y listo: `https://usuario-cuentas-claras.hf.space`.
+1. `huggingface.co/new-space` → SDK **Static** → plantilla **Blank**.
+2. Subí `web/index.html` como `index.html`.
+3. `README.md` con `sdk: static`.
+4. Queda en `https://TU-USUARIO-cuentas-claras.static.hf.space`.
 
 ### Receta: Render
 

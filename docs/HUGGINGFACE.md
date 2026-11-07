@@ -1,102 +1,82 @@
-# Desplegar en Hugging Face Spaces (gratis)
+# Hugging Face Spaces
 
-HF Spaces es la alternativa gratuita más cómoda para esta app: **16 GB de RAM y
-2 vCPU** en el plan free, el Space duerme recién después de ~48 h sin visitas y los
-secretos se cargan desde el navegador. Con el sueño de Streamlit Community Cloud
-(horas) esta app puede quedarse dormida en pleno uso familiar.
+> **Actualizado 2026:** Hugging Face dejó de ofrecer cómputo gratis. Los Spaces
+> **Static** siguen siendo gratuitos; los que ejecutan código (Gradio, Docker —
+> y con ellos cualquier app Python como ésta) requieren **PRO, USD 9/mes**
+> ([precios](https://huggingface.co/pricing)). Con la cuenta free, el selector de
+> SDK muestra Static habilitado y Gradio/Docker con la etiqueta *Paid*.
+>
+> Conclusión práctica: **HF ya no sirve para hostear la app gratis**, pero sí para
+> publicar la landing.
 
-## 1. Crear el Space
+## A. Landing gratis en un Space estático (lo que sí es gratis)
 
-1. Entrá a <https://huggingface.co/new-space>.
-2. Nombre: `cuentas-claras`.
-3. **SDK: Streamlit** (importante; no Gradio, no Docker).
-4. Hardware: *CPU basic · FREE*.
-5. Visibilidad: **Public** (los Spaces privados free no sirven para compartir con
-   otras personas).
-6. *Create Space*.
+1. <https://huggingface.co/new-space> → nombre `cuentas-claras` → **SDK: Static** →
+   plantilla **Blank** → visibilidad pública.
+2. Subí el contenido de `web/` a la raíz del Space: `index.html` (y nada más).
+3. El `README.md` del Space necesita esta cabecera:
 
-## 2. Subir el código
+   ```yaml
+   ---
+   title: Cuentas Claras
+   emoji: 💸
+   sdk: static
+   ---
+   ```
 
-El repo ya trae la cabecera que HF necesita en `README.md` (`sdk: streamlit`,
-`app_file: app.py`, `sdk_version: 1.37.0`), así que alcanza con copiar los archivos.
+4. Queda en `https://TU-USUARIO-cuentas-claras.static.hf.space`.
+   Los botones de la landing ya apuntan a la app en Streamlit Cloud.
 
-**Opción rápida (navegador):** *Files → Add file → Upload files* y subí:
+Es la misma landing que podés publicar en GitHub Pages
+(`docs/DEPLOY.md`, Opción C). Elegí uno; los dos son gratis.
 
-```
-app.py
-requirements.txt
-.streamlit/config.toml
-cuentasclaras/…      (la carpeta completa)
-vistas/…             (la carpeta completa)
-```
+## B. La app en un Space de cómputo (requiere PRO)
 
-**Opción git** (recomendada, y la única que actualiza bien después):
+Si en algún momento pagás PRO, el camino más sólido es **Docker**, porque el SDK de
+Streamlit no siempre aparece en el selector:
 
-```bash
-git clone https://huggingface.co/spaces/TU-USUARIO/cuentas-claras ../space-cc
-python tools/publicar_space.py --destino ../space-cc
-cd ../space-cc
-git add -A && git commit -m "Cuentas Claras v2" && git push
-```
+1. El repo ya trae `Dockerfile` con el puerto 8501 y el healthcheck.
+2. El `README.md` del Space tiene que declarar:
 
-`tools/publicar_space.py` copia sólo lo que el Space necesita (`app.py`,
-`requirements.txt`, `.streamlit/config.toml`, `cuentasclaras/`, `vistas/`, `README.md`)
-y **nunca** secretos, la base local ni las pruebas. Con `--verificar` revisa la
-carpeta sin escribir nada.
+   ```yaml
+   ---
+   title: Cuentas Claras
+   emoji: 💸
+   colorFrom: teal
+   colorTo: green
+   sdk: docker
+   app_port: 8501
+   pinned: false
+   ---
+   ```
 
-> No subas `.streamlit/secrets.toml`, `data/` ni la clave de cifrado: en un Space
-> público esos archivos los ve cualquiera y la service account da acceso a tu Drive.
+   (Ésa es exactamente la cabecera que tiene el README de este repo.)
 
-## 3. Cargar los secretos
+3. `python tools/publicar_space.py --destino ../space-cc` copia al Space sólo lo
+   necesario; después `git add -A && git commit && git push`.
+4. *Settings → Variables and secrets*, con estos nombres (la app acepta con y sin
+   el prefijo `CUENTASCLARAS_`):
 
-*Settings → Variables and secrets → New secret*. HF los inyecta como variables de
-entorno con el nombre exacto que escribas. Nombres recomendados (la app los acepta
-con y sin el prefijo `CUENTASCLARAS_`):
+   | Nombre | Valor |
+   | --- | --- |
+   | `CUENTASCLARAS_HOJA_URL` | URL de la planilla de Google |
+   | `CUENTASCLARAS_GCP_CREDENCIALES` | JSON de la service account en una línea |
+   | `CUENTASCLARAS_CLAVE_CIFRADO` | Clave de `tools/generar_clave.py` |
+   | `CUENTASCLARAS_IMGBB_API_KEY` | API key de imgbb |
+   | `CUENTASCLARAS_ADMINS` | Tu email |
+   | `CUENTASCLARAS_URL_PUBLICA` | `https://TU-USUARIO-cuentas-claras.hf.space` |
 
-| Nombre | Valor |
-| --- | --- |
-| `CUENTASCLARAS_HOJA_URL` | URL de la planilla de Google (la de siempre) |
-| `CUENTASCLARAS_GCP_CREDENCIALES` | El JSON completo de la service account, en una línea |
-| `CUENTASCLARAS_CLAVE_CIFRADO` | La clave de `tools/generar_clave.py` |
-| `CUENTASCLARAS_IMGBB_API_KEY` | Tu API key de imgbb (opcional, para comprobantes) |
-| `CUENTASCLARAS_ADMINS` | Tu email, para ver el panel de plataforma |
-| `CUENTASCLARAS_URL_PUBLICA` | `https://TU-USUARIO-cuentas-claras.hf.space` |
+   Si el JSON no entra en un secreto, usá las partes:
+   `CUENTASCLARAS_GCP_CLIENT_EMAIL`, `CUENTASCLARAS_GCP_PRIVATE_KEY` y
+   `CUENTASCLARAS_GCP_PROJECT_ID`.
 
-Si el JSON no entra en un secreto (algunos paneles tienen tope de tamaño), cargá
-las partes y la app las arma sola:
+5. *Factory rebuild*.
 
-| Nombre | Valor |
-| --- | --- |
-| `CUENTASCLARAS_GCP_CLIENT_EMAIL` | `cuentas-claras@tu-proyecto.iam.gserviceaccount.com` |
-| `CUENTASCLARAS_GCP_PRIVATE_KEY` | La clave privada completa (los `\n` literales están bien) |
-| `CUENTASCLARAS_GCP_PROJECT_ID` | `tu-proyecto` (opcional) |
+### Cuidados (válidos para cualquier host)
 
-Después de cargarlos: *Settings → Factory rebuild* (o *Restart Space*).
-
-## 4. Verificar
-
-1. El Space arranca en `https://TU-USUARIO-cuentas-claras.hf.space`.
-2. Aparece la landing de Cuentas Claras y podés registrarte.
-3. En la planilla se crean las pestañas `cc_*`.
-4. *Hogar → Invitaciones → Generar código*: el mensaje de WhatsApp debe traer el
-   link del Space (por eso `CUENTASCLARAS_URL_PUBLICA`).
-
-## Cosas a tener en cuenta
-
-* **Misma base, misma clave.** Si dejás Streamlit Cloud y HF apuntando a la misma
-  planilla, los dos tienen que usar **la misma `clave_cifrado`**; si no, cada uno
-  escribe datos que el otro no puede leer.
-* **Sueño.** A las ~48 h sin visitas el Space se duerme; la primera visita tarda
-  ~30 s en despertarlo. Es mucho más benigno que las pocas horas de Streamlit.
-* **Disco efímero.** Igual que en Streamlit Cloud: la base va en Google Sheets y las
-  fotos en imgbb (o Drive). Si las dejás en disco, se pierden al reiniciar.
-* **Un Space = un despliegue.** Para clientes distintos, usá el plan Pro y más
-  Spaces, o pasá a un VPS cuando el volumen lo justifique.
-* **Dominio propio.** HF permite asociar un dominio (función de pago); con el plan
-  free quedás en `*.hf.space`.
-
-## Volver atrás
-
-El Space no toca las pestañas viejas (`Gastos`, `Lista_Compras`) ni la app de
-Streamlit: si algo sale mal, borrás el Space y seguís usando la otra. Los datos
-siguen en la planilla.
+* **Misma planilla, misma clave.** Si convivís con Streamlit Cloud, los dos tienen
+  que usar la misma `clave_cifrado`; si no, cada uno escribe datos que el otro no
+  puede leer.
+* **No subas** `.streamlit/secrets.toml`, `data/` ni la clave: en un Space público
+  los ve cualquiera, y la service account da acceso a tu Drive.
+* **Disco efímero:** la base va en Google Sheets y las fotos en imgbb o Drive.

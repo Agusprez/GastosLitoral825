@@ -92,8 +92,10 @@ def verificar(destino: Path) -> list[str]:
         texto = readme.read_text(encoding="utf-8")
         partes = texto.split("---", 2) if texto.startswith("---") else []
         cabecera = partes[1] if len(partes) > 1 else ""
-        if "sdk: streamlit" not in cabecera or "app_file: app.py" not in cabecera:
-            problemas.append("el README no tiene la cabecera de Space (sdk/app_file)")
+        if "sdk:" not in cabecera:
+            problemas.append("el README no tiene la cabecera de Space (falta `sdk:`)")
+        elif "sdk: docker" in cabecera and "app_port" not in cabecera:
+            problemas.append("con `sdk: docker` falta `app_port: 8501` en la cabecera")
 
     for nombre in PROHIBIDOS:
         if (destino / nombre).exists():
